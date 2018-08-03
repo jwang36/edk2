@@ -73,6 +73,10 @@
 #define PAGING_2M_ADDRESS_MASK_64 0x000FFFFFFFE00000ull
 #define PAGING_1G_ADDRESS_MASK_64 0x000FFFFFC0000000ull
 
+#define EFI_MEMORY_SHADOW         0x0800000000000000ull
+#define SHADOW_PAGE_BASE_ADDRESS  0x0000007F00000000ull
+#define SHADOW_PAGE_TOP_ADDRESS   0x0000008000000000ull
+
 typedef enum {
   PageNone,
   Page4K,
@@ -101,6 +105,7 @@ PAGE_ATTRIBUTE_TABLE mPageAttributeTable[] = {
 PAGE_TABLE_POOL                   *mPageTablePool = NULL;
 PAGE_TABLE_LIB_PAGING_CONTEXT     mPagingContext;
 EFI_SMM_BASE2_PROTOCOL            *mSmmBase2 = NULL;
+PHYSICAL_ADDRESS                  mShadowPageBase = SHADOW_PAGE_BASE_ADDRESS;
 
 /**
  Check if current execution environment is in SMM mode or not, via
@@ -801,6 +806,80 @@ Done:
   return Status;
 }
 
+EFI_STATUS
+MapShadowPages (
+  PHYSICAL_ADDRESS        PhysicalAddress,
+  UINTN                   Length,
+  PHYSICAL_ADDRESS        *ShadowAddress
+  )
+{
+  PAGE_TABLE_LIB_PAGING_CONTEXT PagingContext;
+  PAGE_ATTRIBUTE                PageAttribute;
+  UINT64                        *PageEntry;
+  UINTN                         PageEntryLength;
+  PAGE_ATTRIBUTE                SplitAttribute;
+  UINTN                         LengthLeft;
+  PHYSICAL_ADDRESS              BaseAddress;
+  PHYSICAL_ADDRESS              ShadowBaseAddress;
+  UINT64                        AddressEncMask;
+
+  if ((PhysicalAddress & SHADOW_PAGE_BASE_ADDRESS) == SHADOW_PAGE_BASE_ADDRESS) {
+    *ShadowAddress = 0;
+    return EFI_NO_MAPPING;
+  }
+
+  //
+  // Wrap back to the start if not enough memory space.
+  //
+  if ((SHADOW_PAGE_TOP_ADDRESS - mShadowPageBase) <= (Length + EFI_PAGE_SIZE)) {
+    mShadowPageBase = SHADOW_PAGE_BASE_ADDRESS;
+  }
+
+  //
+  // Add one page as Guard page.
+  //
+  mShadowPageBase += EFI_PAGE_SIZE;
+
+  //
+  // Change the original mapping
+  //
+  DisableReadOnlyPageWriteProtect ();
+  GetCurrentPagingContext(&PagingContext);
+
+  AddressEncMask = PcdGet64 (PcdPteMemoryEncryptionAddressOrMask) & PAGING_1G_ADDRESS_MASK_64;
+  LengthLeft = Length;
+  BaseAddress = PhysicalAddress;
+  ShadowBaseAddress = mShadowPageBase;
+  while (LengthLeft > 0) {
+    PageEntry = GetPageTableEntry(&PagingContext, ShadowBaseAddress, &PageAttribute);
+    PageEntryLength = PageAttributeToLength (PageAttribute);
+    SplitAttribute = NeedSplitPage (ShadowBaseAddress, Length, PageEntry, PageAttribute);
+    if (SplitAttribute != PageNone) {
+      SplitPage (PageEntry, PageAttribute, SplitAttribute, AllocatePageTableMemory);
+      continue;
+    }
+
+    *PageEntry = ((*PageEntry) & ~AddressEncMask &
+                  ~mPageAttributeTable[PageAttribute].AddressMask) | BaseAddress;
+
+    BaseAddress += PageEntryLength;
+    ShadowBaseAddress += PageEntryLength;
+    LengthLeft -= PageEntryLength;
+  }
+
+  EnableReadOnlyPageWriteProtect ();
+
+  //
+  // Pass the shadow memory address via the first 8-byte.
+  //
+  *(PHYSICAL_ADDRESS *)PhysicalAddress = mShadowPageBase;
+
+  *ShadowAddress = mShadowPageBase;
+  mShadowPageBase += Length;
+
+  return EFI_SUCCESS;
+}
+
 /**
   This function assigns the page attributes for the memory region specified by BaseAddress and
   Length from their current attributes to the attributes specified by Attributes.
@@ -842,9 +921,20 @@ AssignMemoryPageAttributes (
   RETURN_STATUS  Status;
   BOOLEAN        IsModified;
   BOOLEAN        IsSplitted;
+  PHYSICAL_ADDRESS  ShadowAddress;
 
-//  DEBUG((DEBUG_INFO, "AssignMemoryPageAttributes: 0x%lx - 0x%lx (0x%lx)\n", BaseAddress, Length, Attributes));
-  Status = ConvertMemoryPageAttributes (PagingContext, BaseAddress, Length, Attributes, PageActionAssign, AllocatePagesFunc, &IsSplitted, &IsModified);
+  if ((Attributes & EFI_MEMORY_SHADOW) != 0) {
+    if ((Attributes & EFI_MEMORY_RP) == 0) {
+      Status = MapShadowPages(BaseAddress, Length, &ShadowAddress);
+      if (ShadowAddress != 0) {
+        BaseAddress = ShadowAddress;
+      }
+    }
+
+    Attributes &= ~EFI_MEMORY_SHADOW;
+  }
+
+  Status = ConvertMemoryPageAttributes(PagingContext, BaseAddress, Length, Attributes, PageActionAssign, AllocatePagesFunc, &IsSplitted, &IsModified);
   if (!EFI_ERROR(Status)) {
     if ((PagingContext == NULL) && IsModified) {
       //
@@ -1157,6 +1247,14 @@ InitializePageTableLib (
     InitializePageTablePool (1);
     EnableReadOnlyPageWriteProtect ();
   }
+
+  AssignMemoryPageAttributes (
+    &CurrentPagingContext,
+    SHADOW_PAGE_BASE_ADDRESS,
+    SHADOW_PAGE_TOP_ADDRESS - SHADOW_PAGE_BASE_ADDRESS,
+    EFI_MEMORY_RP,
+    NULL
+    );
 
   DEBUG ((DEBUG_INFO, "CurrentPagingContext:\n", CurrentPagingContext.MachineType));
   DEBUG ((DEBUG_INFO, "  MachineType   - 0x%x\n", CurrentPagingContext.MachineType));
