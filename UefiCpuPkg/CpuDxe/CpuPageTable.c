@@ -541,7 +541,7 @@ SplitPage (
       for (Index = 0; Index < SIZE_4KB / sizeof(UINT64); Index++) {
         NewPageEntry[Index] = (BaseAddress + SIZE_4KB * Index) | AddressEncMask | ((*PageEntry) & PAGE_PROGATE_BITS);
       }
-      (*PageEntry) = (UINT64)(UINTN)NewPageEntry | AddressEncMask | ((*PageEntry) & PAGE_ATTRIBUTE_BITS);
+      (*PageEntry) = (UINT64)(UINTN)NewPageEntry | AddressEncMask | IA32_PG_P | ((*PageEntry) & PAGE_ATTRIBUTE_BITS);
       return RETURN_SUCCESS;
     } else {
       return RETURN_UNSUPPORTED;
@@ -562,7 +562,7 @@ SplitPage (
       for (Index = 0; Index < SIZE_4KB / sizeof(UINT64); Index++) {
         NewPageEntry[Index] = (BaseAddress + SIZE_2MB * Index) | AddressEncMask | IA32_PG_PS | ((*PageEntry) & PAGE_PROGATE_BITS);
       }
-      (*PageEntry) = (UINT64)(UINTN)NewPageEntry | AddressEncMask | ((*PageEntry) & PAGE_ATTRIBUTE_BITS);
+      (*PageEntry) = (UINT64)(UINTN)NewPageEntry | AddressEncMask | IA32_PG_P | ((*PageEntry) & PAGE_ATTRIBUTE_BITS);
       return RETURN_SUCCESS;
     } else {
       return RETURN_UNSUPPORTED;
@@ -859,8 +859,7 @@ MapShadowPages (
       continue;
     }
 
-    *PageEntry = ((*PageEntry) & ~AddressEncMask &
-                  ~mPageAttributeTable[PageAttribute].AddressMask) | BaseAddress;
+    *PageEntry = ((*PageEntry) & ~AddressEncMask & ~PageAttributeToMask(PageAttribute)) | BaseAddress;
 
     BaseAddress += PageEntryLength;
     ShadowBaseAddress += PageEntryLength;
@@ -868,6 +867,7 @@ MapShadowPages (
   }
 
   EnableReadOnlyPageWriteProtect ();
+  CpuFlushTlb();
 
   //
   // Pass the shadow memory address via the first 8-byte.

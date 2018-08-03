@@ -406,7 +406,7 @@ InternalAllocatePool (
     //
     Status = mCpu->SetMemoryAttributes (
                     mCpu,
-                    Memory,
+                    (EFI_PHYSICAL_ADDRESS)Memory,
                     EFI_PAGES_TO_SIZE(PageNumber),
                     EFI_MEMORY_SHADOW
                     );
@@ -877,15 +877,17 @@ InternalFreePool (
 
     Status = mCpu->SetMemoryAttributes (
                     mCpu,
-                    Buffer,
+                    (EFI_PHYSICAL_ADDRESS)Buffer,
                     Length,
                     EFI_MEMORY_SHADOW|EFI_MEMORY_RP
                     );
     ASSERT_EFI_ERROR (Status);
     Buffer = (VOID *)Memory;
+    Status = gBS->FreePages((EFI_PHYSICAL_ADDRESS)Buffer, EFI_SIZE_TO_PAGES(Length));
+  } else {
+    Status = gBS->FreePool (Buffer);
   }
 
-  Status = gBS->FreePool(Buffer);
   ASSERT_EFI_ERROR (Status);
 }
 
@@ -909,9 +911,6 @@ FreePool (
   IN VOID   *Buffer
   )
 {
-  EFI_STATUS    Status;
-
-  Status = gBS->FreePool (Buffer);
-  ASSERT_EFI_ERROR (Status);
+  InternalFreePool (Buffer);
 }
 
