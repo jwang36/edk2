@@ -533,7 +533,7 @@ SplitPage (
     ASSERT (SplitAttribute == Page4K);
     if (SplitAttribute == Page4K) {
       NewPageEntry = AllocatePagesFunc (1);
-      DEBUG ((DEBUG_INFO, "Split - 0x%x\n", NewPageEntry));
+      DEBUG ((DEBUG_VERBOSE, "Split - 0x%x\n", NewPageEntry));
       if (NewPageEntry == NULL) {
         return RETURN_OUT_OF_RESOURCES;
       }
@@ -554,7 +554,7 @@ SplitPage (
     ASSERT (SplitAttribute == Page2M || SplitAttribute == Page4K);
     if ((SplitAttribute == Page2M || SplitAttribute == Page4K)) {
       NewPageEntry = AllocatePagesFunc (1);
-      DEBUG ((DEBUG_INFO, "Split - 0x%x\n", NewPageEntry));
+      DEBUG ((DEBUG_VERBOSE, "Split - 0x%x\n", NewPageEntry));
       if (NewPageEntry == NULL) {
         return RETURN_OUT_OF_RESOURCES;
       }
@@ -818,7 +818,7 @@ MapShadowPages (
   UINT64                        *PageEntry;
   UINTN                         PageEntryLength;
   PAGE_ATTRIBUTE                SplitAttribute;
-  UINTN                         LengthLeft;
+  INTN                          LengthLeft;
   PHYSICAL_ADDRESS              BaseAddress;
   PHYSICAL_ADDRESS              ShadowBaseAddress;
   UINT64                        AddressEncMask;
@@ -828,28 +828,45 @@ MapShadowPages (
     return EFI_NO_MAPPING;
   }
 
-  //
-  // Wrap back to the start if not enough memory space.
-  //
-  if ((SHADOW_PAGE_TOP_ADDRESS - mShadowPageBase) <= (Length + EFI_PAGE_SIZE)) {
-    mShadowPageBase = SHADOW_PAGE_BASE_ADDRESS;
-  }
+  GetCurrentPagingContext(&PagingContext);
 
   //
-  // Add one page as Guard page.
+  // Find the avaiable memory space. Add one page as Guard page.
   //
-  mShadowPageBase += EFI_PAGE_SIZE;
+  LengthLeft = (INTN)(Length + EFI_PAGE_SIZE);
+  ShadowBaseAddress = mShadowPageBase;
+  while (LengthLeft > 0) {
+    PageEntry = GetPageTableEntry(&PagingContext, ShadowBaseAddress, &PageAttribute);
+    PageEntryLength = PageAttributeToLength (PageAttribute);
+    ShadowBaseAddress += PageEntryLength;
+
+    // Find the continuous address space with not-present attribute
+    if ((*PageEntry & IA32_PG_P) == 0) {
+      LengthLeft -= PageEntryLength;
+    } else {
+      // Rewind if not enough available address space.
+      LengthLeft = (INTN)(Length + EFI_PAGE_SIZE);
+      mShadowPageBase = ShadowBaseAddress;
+    }
+
+    if (ShadowBaseAddress > SHADOW_PAGE_TOP_ADDRESS) {
+      DEBUG ((DEBUG_INFO, "Shadow page wrapback\r\n"));
+      ShadowBaseAddress = SHADOW_PAGE_BASE_ADDRESS;
+      mShadowPageBase = SHADOW_PAGE_BASE_ADDRESS;
+      LengthLeft = (INTN)(Length + EFI_PAGE_SIZE);
+    }
+  }
 
   //
   // Change the original mapping
   //
   DisableReadOnlyPageWriteProtect ();
-  GetCurrentPagingContext(&PagingContext);
 
   AddressEncMask = PcdGet64 (PcdPteMemoryEncryptionAddressOrMask) & PAGING_1G_ADDRESS_MASK_64;
-  LengthLeft = Length;
+  mShadowPageBase += EFI_PAGE_SIZE;   // add one page as Guard page
   BaseAddress = PhysicalAddress;
   ShadowBaseAddress = mShadowPageBase;
+  LengthLeft = (INTN)Length;
   while (LengthLeft > 0) {
     PageEntry = GetPageTableEntry(&PagingContext, ShadowBaseAddress, &PageAttribute);
     PageEntryLength = PageAttributeToLength (PageAttribute);
@@ -870,10 +887,9 @@ MapShadowPages (
   CpuFlushTlb();
 
   //
-  // Pass the shadow memory address via the first 8-byte.
+  // Store the shadow memory address in the first 8-byte.
   //
   *(PHYSICAL_ADDRESS *)PhysicalAddress = mShadowPageBase;
-
   *ShadowAddress = mShadowPageBase;
   mShadowPageBase += Length;
 
