@@ -76,6 +76,11 @@
 #define EFI_MEMORY_SHADOW         0x0800000000000000ull
 #define SHADOW_PAGE_BASE_ADDRESS  0x0000007F00000000ull
 #define SHADOW_PAGE_TOP_ADDRESS   0x0000008000000000ull
+//
+// For qemu virtual platform
+// 
+//#define SHADOW_PAGE_BASE_ADDRESS  0x0000000100000000ull
+//#define SHADOW_PAGE_TOP_ADDRESS   0x0000000180000000ull
 
 typedef enum {
   PageNone,
@@ -823,8 +828,8 @@ MapShadowPages (
   PHYSICAL_ADDRESS              ShadowBaseAddress;
   UINT64                        AddressEncMask;
 
+  *ShadowAddress = 0;
   if ((PhysicalAddress & SHADOW_PAGE_BASE_ADDRESS) == SHADOW_PAGE_BASE_ADDRESS) {
-    *ShadowAddress = 0;
     return EFI_NO_MAPPING;
   }
 
@@ -837,7 +842,10 @@ MapShadowPages (
   ShadowBaseAddress = mShadowPageBase;
   while (LengthLeft > 0) {
     PageEntry = GetPageTableEntry(&PagingContext, ShadowBaseAddress, &PageAttribute);
-    PageEntryLength = PageAttributeToLength (PageAttribute);
+    if (PageEntry == NULL) {
+      return EFI_NO_MAPPING;
+    }
+    PageEntryLength = PageAttributeToLength(PageAttribute);
     ShadowBaseAddress += PageEntryLength;
 
     // Find the continuous address space with not-present attribute
