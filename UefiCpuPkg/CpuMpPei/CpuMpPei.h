@@ -402,4 +402,18 @@ SecPlatformInformation2 (
      OUT EFI_SEC_PLATFORM_INFORMATION_RECORD2 *PlatformInformationRecord2
   );
 
+/**
+  Initializes MP and exceptions handlers.
+
+  @retval EFI_SUCCESS     MP was successfully initialized.
+  @retval others          Error occurred in MP initialization.
+
+**/
+EFI_STATUS
+InitializeCpuMpWorker (
+  VOID
+  );
+
+extern EFI_PEI_NOTIFY_DESCRIPTOR  mPostMemNotifyList[];
+
 #endif

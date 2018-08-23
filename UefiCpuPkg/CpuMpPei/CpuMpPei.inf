@@ -31,6 +31,7 @@
   CpuMpPei.h
   CpuMpPei.c
   CpuBist.c
+  CpuPaging.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -57,9 +58,17 @@
   ## UNDEFINED # HOB
   gEfiSecPlatformInformation2PpiGuid
   gEfiVectorHandoffInfoPpiGuid                  ## SOMETIMES_CONSUMES
+  gEfiPeiMemoryDiscoveredPpiGuid
+
+[Pcd]
+  gEfiMdeModulePkgTokenSpaceGuid.PcdPteMemoryEncryptionAddressOrMask    ## CONSUMES
+  gEfiMdeModulePkgTokenSpaceGuid.PcdCpuStackGuard                       ## CONSUMES
+  gUefiCpuPkgTokenSpaceGuid.PcdCpuStackSwitchExceptionList
+  gUefiCpuPkgTokenSpaceGuid.PcdCpuKnownGoodStackSize
+  gUefiCpuPkgTokenSpaceGuid.PcdCpuApStackSize
 
 [Depex]
-  gEfiPeiMemoryDiscoveredPpiGuid
+  TRUE
 
 [UserExtensions.TianoCore."ExtraFiles"]
   CpuMpPeiExtra.uni
