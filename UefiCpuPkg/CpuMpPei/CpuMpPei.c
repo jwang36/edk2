@@ -616,7 +616,7 @@ InitializeMpExceptionStackSwitchHandlers (
 **/
 EFI_STATUS
 InitializeCpuMpWorker (
-  VOID
+  IN CONST EFI_PEI_SERVICES     **PeiServices
   )
 {
   EFI_STATUS                      Status;
@@ -649,7 +649,18 @@ InitializeCpuMpWorker (
 
   InitializeMpExceptionStackSwitchHandlers ();
 
-  return EFI_SUCCESS;
+  //
+  // Update and publish CPU BIST information
+  //
+  CollectBistDataFromPpi (PeiServices);
+
+  //
+  // Install CPU MP PPI
+  //
+  Status = PeiServicesInstallPpi(&mPeiCpuMpPpiDesc);
+  ASSERT_EFI_ERROR (Status);
+
+  return Status;
 }
 
 /**
@@ -674,27 +685,10 @@ CpuMpPeimInit (
   EFI_STATUS           Status;
 
   //
-  // Shadow this PEIM to run from memory
+  // For the sake of special initialization needing to be done right after
+  // memory discovery.
   //
-  if (!EFI_ERROR (PeiServicesRegisterForShadow (FileHandle))) {
-    //
-    // For special initialization done right after memory discovery.
-    //
-    Status = PeiServicesNotifyPpi (&mPostMemNotifyList[0]);
-    ASSERT_EFI_ERROR (Status);
-
-    return EFI_SUCCESS;
-  }
-
-  //
-  // Update and publish CPU BIST information
-  //
-  CollectBistDataFromPpi (PeiServices);
-
-  //
-  // Install CPU MP PPI
-  //
-  Status = PeiServicesInstallPpi(&mPeiCpuMpPpiDesc);
+  Status = PeiServicesNotifyPpi (&mPostMemNotifyList[0]);
   ASSERT_EFI_ERROR (Status);
 
   return Status;
