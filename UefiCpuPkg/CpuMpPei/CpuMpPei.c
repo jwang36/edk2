@@ -637,6 +637,9 @@ InitializeCpuMpWorker (
     VectorInfo = VectorHandoffInfoPpi->Info;
   }
 
+  //
+  // Initialize default handlers
+  //
   Status = InitializeCpuExceptionHandlers (VectorInfo);
   if (EFI_ERROR (Status)) {
     return Status;
@@ -647,6 +650,9 @@ InitializeCpuMpWorker (
     return Status;
   }
 
+  //
+  // Special initialization for the sake of Stack Guard
+  //
   InitializeMpExceptionStackSwitchHandlers ();
 
   //
