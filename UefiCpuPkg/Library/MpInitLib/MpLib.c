@@ -1655,7 +1655,6 @@ MpInitLibInitialize (
   // Duplicate BSP's IDT to APs.
   // All APs share one separate IDT. So AP can get the address of CpuMpData by using IDTR.BASE + IDTR.LIMIT + 1
   //
-  *(UINTN *)(ApIdtBase - sizeof(UINTN)) = *(UINTN *)(VolatileRegisters.Idtr.Base - sizeof(UINTN));
   CopyMem ((VOID *)ApIdtBase, (VOID *)VolatileRegisters.Idtr.Base, VolatileRegisters.Idtr.Limit + 1);
   VolatileRegisters.Idtr.Base = ApIdtBase;
   CopyMem (&CpuMpData->CpuData[0].VolatileRegisters, &VolatileRegisters, sizeof (VolatileRegisters));
