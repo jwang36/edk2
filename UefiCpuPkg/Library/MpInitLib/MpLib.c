@@ -1558,9 +1558,10 @@ MpInitLibInitialize (
   ApLoopMode  = GetApLoopMode (&MonitorFilterSize);
 
   //
-  // Save BSP's Control registers for APs
+  // Save BSP's Control registers for APs, except to TR.
   //
   SaveVolatileRegisters (&VolatileRegisters);
+  VolatileRegisters.Tr = 0;
 
   BufferSize  = ApStackSize * MaxLogicalProcessorNumber;
   BufferSize += MonitorFilterSize * MaxLogicalProcessorNumber;

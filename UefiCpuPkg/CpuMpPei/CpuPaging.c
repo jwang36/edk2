@@ -163,15 +163,12 @@ GetPageTableTopLevelType (
   MSR_IA32_EFER_REGISTER      MsrEfer;
 
   MsrEfer.Uint64 = AsmReadMsr64 (MSR_CORE_IA32_EFER);
-  if (sizeof(UINTN) == 8 && MsrEfer.Bits.LMA == 1) {
-    return Page512G;
-  }
 
-  return Page1G;
+  return (MsrEfer.Bits.LMA == 1) ? Page512G : Page1G;
 }
 
 /**
-  Return page table entry to match the address.
+  Return page table entry matching the address.
 
   @param[in]   Address          The address to be checked.
   @param[out]  PageAttributes   The page attribute of the page entry.
@@ -260,7 +257,7 @@ SplitPage (
   }
 
   //
-  // Split to just next smaller size of pages to get more compact page table.
+  // One level down each step to achieve more compact page table.
   //
   SplitTo = PageAttribute - 1;
   AddressEncMask = PcdGet64 (PcdPteMemoryEncryptionAddressOrMask) &
@@ -494,10 +491,14 @@ GetStackBase (
   IN OUT VOID *Buffer
   )
 {
-  UINTN     Dummy;
+  EFI_PHYSICAL_ADDRESS    StackBase;
 
-  *(UINTN *)Buffer = ((UINTN)(&Dummy + BASE_4KB) & (~((UINTN)BASE_4KB - 1)))
-                     - PcdGet32(PcdCpuApStackSize);
+  StackBase = (EFI_PHYSICAL_ADDRESS)(UINTN)&StackBase;
+  StackBase += BASE_4KB;
+  StackBase &= ~((EFI_PHYSICAL_ADDRESS)BASE_4KB - 1);
+  StackBase -= PcdGet32(PcdCpuApStackSize);
+
+  *(EFI_PHYSICAL_ADDRESS *)Buffer = StackBase;
 }
 
 /**
@@ -511,35 +512,10 @@ SetupStackGuardPage (
   )
 {
   EFI_PEI_HOB_POINTERS        Hob;
-  UINTN                       StackBase;
+  EFI_PHYSICAL_ADDRESS        StackBase;
   UINTN                       NumberOfProcessors;
   UINTN                       Bsp;
   UINTN                       Index;
-
-  //
-  // For BSP
-  //
-  Hob.Raw = GetHobList ();
-  while ((Hob.Raw = GetNextHob (EFI_HOB_TYPE_MEMORY_ALLOCATION, Hob.Raw)) != NULL) {
-    if (CompareGuid (&gEfiHobMemoryAllocStackGuid,
-                     &(Hob.MemoryAllocationStack->AllocDescriptor.Name))) {
-
-      ConvertMemoryPageAttributes (
-        Hob.MemoryAllocationStack->AllocDescriptor.MemoryBaseAddress,
-        EFI_PAGE_SIZE,
-        0
-        );
-      DEBUG ((DEBUG_INFO, "Stack Guard set at %lx [bsp]!\n",
-              (UINT64)Hob.MemoryAllocationStack->AllocDescriptor.MemoryBaseAddress));
-      break;
-
-    }
-    Hob.Raw = GET_NEXT_HOB (Hob);
-  }
-
-  //
-  // For APs
-  //
 
   //
   // One extra page at the bottom of the stack is needed for Guard page.
@@ -553,12 +529,21 @@ SetupStackGuardPage (
   MpInitLibWhoAmI (&Bsp);
   for (Index = 0; Index < NumberOfProcessors; ++Index) {
     if (Index == Bsp) {
-      continue;
+      Hob.Raw = GetHobList ();
+      while ((Hob.Raw = GetNextHob (EFI_HOB_TYPE_MEMORY_ALLOCATION, Hob.Raw)) != NULL) {
+        if (CompareGuid (&gEfiHobMemoryAllocStackGuid,
+                         &(Hob.MemoryAllocationStack->AllocDescriptor.Name))) {
+          StackBase = Hob.MemoryAllocationStack->AllocDescriptor.MemoryBaseAddress;
+          break;
+        }
+        Hob.Raw = GET_NEXT_HOB (Hob);
+      }
+    } else {
+      //
+      // Ask AP to return is stack base address.
+      //
+      MpInitLibStartupThisAP(GetStackBase, Index, NULL, 0, (VOID *)&StackBase, NULL);
     }
-    //
-    // Ask AP to return is stack base address.
-    //
-    MpInitLibStartupThisAP(GetStackBase, Index, NULL, 0, (VOID *)&StackBase, NULL);
     //
     // Set Guard page at stack base address.
     //
@@ -571,22 +556,6 @@ SetupStackGuardPage (
   // Publish the changes of page table.
   //
   CpuFlushTlb ();
-}
-
-VOID
-EFIAPI
-StackOverFlow(
-  IN OUT VOID *Buffer
-  )
-{
-  STATIC UINTN    Level = 0;
-  UINT8           BlowUp[1024];
-
-  SetMem(BlowUp, sizeof(BlowUp), 0);
-  if (Level < 1024) {
-    ++Level;
-    StackOverFlow(NULL);
-  }
 }
 
 /**
@@ -628,10 +597,7 @@ MemoryDiscoveredPpiNotifyCallback (
   ASSERT_EFI_ERROR (Status);
 
   if (InitStackGuard) {
-    DEBUG ((DEBUG_INFO, "Setup Stack Guard for BSP and APs\n"));
     SetupStackGuardPage ();
-    //StackOverFlow(NULL);
-    //MpInitLibStartupThisAP(StackOverFlow, 1, NULL, 0, NULL, NULL);
   }
 
 
