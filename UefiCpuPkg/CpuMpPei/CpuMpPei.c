@@ -496,7 +496,11 @@ InitializeMpExceptionStackSwitchHandlers (
              NewStackSize * NumberOfProcessors,
              (VOID **)&StackTop
              );
-  ASSERT (StackTop != NULL);
+  ASSERT(StackTop != NULL);
+  if (EFI_ERROR (Status)) {
+    ASSERT_EFI_ERROR (Status);
+    return;
+  }
   StackTop += NewStackSize  * NumberOfProcessors;
 
   //
@@ -572,6 +576,10 @@ InitializeMpExceptionStackSwitchHandlers (
                (VOID **)&GdtBuffer
                );
     ASSERT (GdtBuffer != NULL);
+    if (EFI_ERROR (Status)) {
+      ASSERT_EFI_ERROR (Status);
+      return;
+    }
 
     //
     // Make sure GDT table alignment
