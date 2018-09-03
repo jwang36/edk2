@@ -625,13 +625,12 @@ MemoryDiscoveredPpiNotifyCallback (
     InitStackGuard = TRUE;
   }
 
-  Status = InitializeCpuMpWorker (PeiServices);
+  Status = InitializeCpuMpWorker ((CONST EFI_PEI_SERVICES **)PeiServices);
   ASSERT_EFI_ERROR (Status);
 
   if (InitStackGuard) {
     SetupStackGuardPage ();
   }
-
 
   return Status;
 }
