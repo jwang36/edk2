@@ -624,7 +624,7 @@ InitializeMpExceptionStackSwitchHandlers (
 **/
 EFI_STATUS
 InitializeCpuMpWorker (
-  IN CONST EFI_PEI_SERVICES     **PeiServices
+  IN EFI_PEI_SERVICES     **PeiServices
   )
 {
   EFI_STATUS                      Status;

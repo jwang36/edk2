@@ -411,7 +411,7 @@ SecPlatformInformation2 (
 **/
 EFI_STATUS
 InitializeCpuMpWorker (
-  IN CONST EFI_PEI_SERVICES     **PeiServices
+  IN EFI_PEI_SERVICES     **PeiServices
   );
 
 extern EFI_PEI_NOTIFY_DESCRIPTOR  mPostMemNotifyList[];
