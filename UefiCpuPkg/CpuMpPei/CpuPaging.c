@@ -130,6 +130,13 @@ AllocatePageTableMemory (
   return Address;
 }
 
+/**
+  Get the address width supported by current processor.
+
+  @retval 32      If processor is in 32-bit mode.
+  @retval 36-48   If processor is in 64-bit mode.
+
+**/
 UINTN
 GetPhysicalAddressWidth (
   VOID
@@ -155,6 +162,13 @@ GetPhysicalAddressWidth (
   return 36;
 }
 
+/**
+  Get the type of top level page table.
+
+  @retval Page512G  PML4 paging.
+  @retval Page1G    PAE paing.
+
+**/
 PAGE_ATTRIBUTE
 GetPageTableTopLevelType (
   VOID
@@ -221,11 +235,12 @@ GetPageTableEntry (
 }
 
 /**
-  This function splits one page entry to small page entries.
+  This function splits one page entry to smaller page entries.
 
   @param[in]  PageEntry        The page entry to be splitted.
   @param[in]  PageAttribute    The page attribute of the page entry.
   @param[in]  SplitAttribute   How to split the page entry.
+  @param[in]  Recursively      Do the split recursively or not.
 
   @retval RETURN_SUCCESS            The page entry is splitted.
   @retval RETURN_INVALID_PARAMETER  If target page attribute is invalid
@@ -253,6 +268,7 @@ SplitPage (
 
   NewPageEntry = AllocatePageTableMemory (1);
   if (NewPageEntry == NULL) {
+    ASSERT (NewPageEntry != NULL);
     return RETURN_OUT_OF_RESOURCES;
   }
 
@@ -358,6 +374,9 @@ ConvertMemoryPageAttributes (
       continue;
     }
 
+    //
+    // Just take care of 'present' bit for Stack Guard.
+    //
     if ((Attributes & IA32_PG_P) != 0) {
       *PageEntry |= (UINT64)IA32_PG_P;
     } else {
@@ -374,6 +393,13 @@ ConvertMemoryPageAttributes (
   return RETURN_SUCCESS;
 }
 
+/**
+  Get maximum size of page memory supported by current processor.
+
+  @retval Page1G     If processor supports 1G page and PML4.
+  @retval Page2M     For all other situations.
+
+**/
 PAGE_ATTRIBUTE
 GetMaxMemoryPage (
   IN  PAGE_ATTRIBUTE  TopLevelType
@@ -396,8 +422,7 @@ GetMaxMemoryPage (
 }
 
 /**
-  Allocates and fills in the Page Directory and Page Table Entries to
-  establish a 4G PAE page table.
+  Create PML4 or PAE page table.
 
   @return The address of page table.
 
@@ -424,18 +449,22 @@ CreatePageTable (
                                  mPageAttributeTable[TopLevelPageAttr].AddressBitOffset);
 
   PageTable = (UINTN) AllocatePageTableMemory (1);
-  ASSERT (PageTable != 0);
+  if (PageTable == 0) {
+    return 0;
+  }
 
   AddressEncMask = PcdGet64 (PcdPteMemoryEncryptionAddressOrMask);
   AddressEncMask &= mPageAttributeTable[TopLevelPageAttr].AddressMask;
   MaxMemoryPage = GetMaxMemoryPage (TopLevelPageAttr);
   PageEntry = (UINT64 *)PageTable;
 
-  DEBUG ((DEBUG_INFO, "MaxPage=%d, TopEntries=%d,%d\n", MaxMemoryPage, TopLevelPageAttr, NumberOfEntries));
   PhysicalAddress = 0;
   for (Index = 0; Index < NumberOfEntries; ++Index) {
     *PageEntry = PhysicalAddress | AddressEncMask | PAGE_ATTRIBUTE_BITS;
 
+    //
+    // Split the top page table down to the maximum page size supported
+    //
     if (MaxMemoryPage < TopLevelPageAttr) {
       Status = SplitPage(PageEntry, TopLevelPageAttr, MaxMemoryPage, TRUE);
       ASSERT_EFI_ERROR (Status);
@@ -468,9 +497,12 @@ EnablePaging (
   UINTN                       PageTable;
 
   PageTable = CreatePageTable ();
-  AsmWriteCr3 (PageTable);
-  AsmWriteCr4 (AsmReadCr4 () | BIT5);   // CR4.PAE
-  AsmWriteCr0 (AsmReadCr0 () | BIT31);  // CR0.PG
+  ASSERT (PageTable != 0);
+  if (PageTable != 0) {
+    AsmWriteCr3(PageTable);
+    AsmWriteCr4 (AsmReadCr4 () | BIT5);   // CR4.PAE
+    AsmWriteCr0 (AsmReadCr0 () | BIT31);  // CR0.PG
+  }
 }
 
 /**
