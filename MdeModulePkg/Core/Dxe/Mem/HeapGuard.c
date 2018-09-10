@@ -1211,8 +1211,30 @@ HeapGuardCpuArchProtocolNotify (
   VOID
   )
 {
+  LIST_ENTRY        *Link;
+  MEMORY_MAP        *Entry;
+
   ASSERT (gCpu != NULL);
   SetAllGuardPages ();
+
+  //
+  // Mark all free pages to not-present
+  //
+  if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0) {
+    Link = gMemoryMap.ForwardLink;
+    while (Link != &gMemoryMap) {
+      Entry = CR (Link, MEMORY_MAP, Link, MEMORY_MAP_SIGNATURE);
+      if (Entry->Type == EfiConventionalMemory) {
+        gCpu->SetMemoryAttributes (
+                gCpu,
+                Entry->BaseAddress,
+                Entry->Length,
+                EFI_MEMORY_RP
+                );
+      }
+      Link  = Link->ForwardLink;
+    }
+  }
 }
 
 /**

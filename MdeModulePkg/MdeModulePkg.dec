@@ -1015,6 +1015,7 @@
   #   BIT1 - Enable UEFI pool guard.<BR>
   #   BIT2 - Enable SMM page guard.<BR>
   #   BIT3 - Enable SMM pool guard.<BR>
+  #   BIT4 - Enable free heap guard.<BR>
   #   BIT6 - Enable non-stop mode.<BR>
   #   BIT7 - The direction of Guard Page for Pool Guard.
   #          0 - The returned pool is near the tail guard page.<BR>
