@@ -898,7 +898,12 @@ CoreConvertPagesEx (
     //
     // Add our new range in
     //
-    CoreAddRange (MemType, Start, RangeEnd, Attribute);
+    if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) == 0 ||
+        !ChangingType ||
+        MemType != EfiConventionalMemory) {
+      CoreAddRange (MemType, Start, RangeEnd, Attribute);
+    }
+
     if (ChangingType && (MemType == EfiConventionalMemory)) {
       //
       // Avoid calling DEBUG_CLEAR_MEMORY() for an address of 0 because this
@@ -1348,6 +1353,15 @@ Done:
   CoreReleaseMemoryLock ();
 
   if (!EFI_ERROR (Status)) {
+    if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 && gCpu != NULL) {
+      gCpu->SetMemoryAttributes (
+              gCpu,
+              Start,
+              EFI_PAGES_TO_SIZE(NumberOfPages),
+              0
+              );
+    }
+
     if (NeedGuard) {
       SetGuardForMemory (Start, NumberOfPages);
     }
@@ -1488,6 +1502,18 @@ CoreInternalFreePages (
 
 Done:
   CoreReleaseMemoryLock ();
+
+  if (!EFI_ERROR(Status) &&
+      (PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 &&
+      gCpu != NULL) {
+    gCpu->SetMemoryAttributes (
+            gCpu,
+            Memory,
+            EFI_PAGES_TO_SIZE(NumberOfPages),
+            EFI_MEMORY_RP
+            );
+  }
+
   return Status;
 }
 

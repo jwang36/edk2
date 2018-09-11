@@ -1305,7 +1305,7 @@ InitializePageTableLib (
       (CurrentPagingContext.ContextData.Ia32.Attributes &
        PAGE_TABLE_LIB_PAGING_CONTEXT_IA32_X64_ATTRIBUTES_PAE) != 0) {
     DisableReadOnlyPageWriteProtect ();
-    InitializePageTablePool (1);
+    InitializePageTablePool (0x800);
     EnableReadOnlyPageWriteProtect ();
   }
 

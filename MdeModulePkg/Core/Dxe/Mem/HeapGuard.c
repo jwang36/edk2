@@ -1227,8 +1227,8 @@ HeapGuardCpuArchProtocolNotify (
       if (Entry->Type == EfiConventionalMemory) {
         gCpu->SetMemoryAttributes (
                 gCpu,
-                Entry->BaseAddress,
-                Entry->Length,
+                Entry->Start,
+                Entry->End - Entry->Start + 1,
                 EFI_MEMORY_RP
                 );
       }
