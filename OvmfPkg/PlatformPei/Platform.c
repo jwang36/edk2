@@ -340,7 +340,6 @@ NoexecDxeInitialization (
   )
 {
   UPDATE_BOOLEAN_PCD_FROM_FW_CFG (PcdPropertiesTableEnable);
-  UPDATE_BOOLEAN_PCD_FROM_FW_CFG (PcdSetNxForStack);
 }
 
 VOID
