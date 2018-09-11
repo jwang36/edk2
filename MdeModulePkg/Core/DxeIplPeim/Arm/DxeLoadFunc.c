@@ -45,7 +45,11 @@ HandOffToDxeCore (
   BaseOfStack = AllocatePages (EFI_SIZE_TO_PAGES (STACK_SIZE));
   ASSERT (BaseOfStack != NULL);
 
-  if (PcdGetBool (PcdSetNxForStack)) {
+  //
+  // Set stack to non-executable, if EfiBootServicesData type of memory is
+  // set for NX protection.
+  //
+  if ((PcdGet64 (PcdDxeNxMemoryProtectionPolicy) & BIT4) != 0) {
     Status = ArmSetMemoryRegionNoExec ((UINTN)BaseOfStack, STACK_SIZE);
     ASSERT_EFI_ERROR (Status);
   }

@@ -245,7 +245,8 @@ ToBuildPageTable (
     return TRUE;
   }
 
-  if (PcdGetBool (PcdSetNxForStack) && IsExecuteDisableBitAvailable ()) {
+  if (PcdGet64 (PcdDxeNxMemoryProtectionPolicy) != 0 &&
+      IsExecuteDisableBitAvailable ()) {
     return TRUE;
   }
 

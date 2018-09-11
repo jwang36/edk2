@@ -152,7 +152,11 @@ ToSplitPageTable (
     }
   }
 
-  if (PcdGetBool (PcdSetNxForStack)) {
+  //
+  // Set stack to non-executable, if EfiBootServicesData type of memory is
+  // set for NX protection.
+  //
+  if ((PcdGet64 (PcdDxeNxMemoryProtectionPolicy) & BIT4) != 0) {
     if ((Address < StackBase + StackSize) && ((Address + Size) > StackBase)) {
       return TRUE;
     }
@@ -314,7 +318,11 @@ Split2MPageTo4K (
       PageTableEntry->Bits.Present = 1;
     }
 
-    if (PcdGetBool (PcdSetNxForStack)
+    //
+    // Set stack to non-executable, if EfiBootServicesData type of memory is
+    // set for NX protection.
+    //
+    if ((PcdGet64 (PcdDxeNxMemoryProtectionPolicy) & BIT4) != 0
         && (PhysicalAddress4K >= StackBase)
         && (PhysicalAddress4K < StackBase + StackSize)) {
       //
@@ -755,7 +763,7 @@ CreateIdentityMappingPageTables (
   //
   EnablePageTableProtection ((UINTN)PageMap, TRUE);
 
-  if (PcdGetBool (PcdSetNxForStack)) {
+  if (PcdGet64 (PcdDxeNxMemoryProtectionPolicy) != 0) {
     EnableExecuteDisableBit ();
   }
 

@@ -94,7 +94,7 @@ HandOffToDxeCore (
     // Set NX for stack feature also require PcdDxeIplBuildPageTables be TRUE
     // for the DxeIpl and the DxeCore are both X64.
     //
-    ASSERT (PcdGetBool (PcdSetNxForStack) == FALSE);
+    ASSERT (PcdGet64 (PcdDxeNxMemoryProtectionPolicy) == 0);
     ASSERT (PcdGetBool (PcdCpuStackGuard) == FALSE);
   }
 
