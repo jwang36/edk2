@@ -339,15 +339,6 @@
 
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdSerialRegisterStride_HELP  #language en-US "The number of bytes between registers in serial device.  The default is 1 byte."
 
-#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdSetNxForStack_PROMPT  #language en-US "Set NX for stack"
-
-#string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdSetNxForStack_HELP  #language en-US "Indicates if to set NX for stack.<BR><BR>"
-                                                                                  "For the DxeIpl and the DxeCore are both X64, set NX for stack feature also require PcdDxeIplBuildPageTables be TRUE.<BR>"
-                                                                                  "For the DxeIpl and the DxeCore are both IA32 (PcdDxeIplSwitchToLongMode is FALSE), set NX for stack feature also require"
-                                                                                  "IA32 PAE is supported and Execute Disable Bit is available.<BR>"
-                                                                                  "TRUE  - to set NX for stack.<BR>"
-                                                                                  "FALSE - Not to set NX for stack.<BR>"
-
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiS3Enable_PROMPT  #language en-US "ACPI S3 Enable"
 
 #string STR_gEfiMdeModulePkgTokenSpaceGuid_PcdAcpiS3Enable_HELP  #language en-US "Indicates if ACPI S3 will be enabled.<BR><BR>"
@@ -1129,6 +1120,7 @@
                                                                                                 "\n"
                                                                                                 "NOTE: User must NOT set NX protection for EfiLoaderCode / EfiBootServicesCode / EfiRuntimeServicesCode. <BR>\n"
                                                                                                 "User MUST set the same NX protection for EfiBootServicesData and EfiConventionalMemory. <BR>\n"
+                                                                                                "Stack is allocated as type of EfiBootServicesData. Enable NX protection for it will also enable NX protection for stack. <BR>\n"
                                                                                                 "\n"
                                                                                                 "e.g. 0x7FD5 can be used for all memory except Code. <BR>\n"
                                                                                                 "e.g. 0x7BD4 can be used for all memory except Code and ACPINVS/Reserved. <BR>\n"
