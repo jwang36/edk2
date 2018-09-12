@@ -1982,6 +1982,14 @@ CoreAllocatePoolPages (
     } else {
       CoreConvertPages (Start, NumberOfPages, PoolType);
     }
+    if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 && gCpu != NULL) {
+      gCpu->SetMemoryAttributes (
+              gCpu,
+              Start,
+              EFI_PAGES_TO_SIZE(NumberOfPages),
+              0
+              );
+    }
   }
 
   return (VOID *)(UINTN) Start;
@@ -2002,6 +2010,14 @@ CoreFreePoolPages (
   )
 {
   CoreConvertPages (Memory, NumberOfPages, EfiConventionalMemory);
+  if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 && gCpu != NULL) {
+    gCpu->SetMemoryAttributes (
+            gCpu,
+            Memory,
+            EFI_PAGES_TO_SIZE(NumberOfPages),
+            EFI_MEMORY_RP
+            );
+  }
 }
 
 
