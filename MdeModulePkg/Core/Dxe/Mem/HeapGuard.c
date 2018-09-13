@@ -1211,12 +1211,12 @@ HeapGuardCpuArchProtocolNotify (
   VOID
   )
 {
-  LIST_ENTRY        *Link;
-  MEMORY_MAP        *Entry;
+//  LIST_ENTRY        *Link;
+//  MEMORY_MAP        *Entry;
 
   ASSERT (gCpu != NULL);
   SetAllGuardPages ();
-
+#if 0
   //
   // Mark all free pages to not-present
   //
@@ -1224,7 +1224,7 @@ HeapGuardCpuArchProtocolNotify (
     Link = gMemoryMap.ForwardLink;
     while (Link != &gMemoryMap) {
       Entry = CR (Link, MEMORY_MAP, Link, MEMORY_MAP_SIGNATURE);
-      if (Entry->Type == EfiConventionalMemory) {
+      if (Entry->End > 0x100000 && Entry->Type == EfiConventionalMemory) {
         gCpu->SetMemoryAttributes (
                 gCpu,
                 Entry->Start,
@@ -1235,6 +1235,7 @@ HeapGuardCpuArchProtocolNotify (
       Link  = Link->ForwardLink;
     }
   }
+#endif
 }
 
 /**

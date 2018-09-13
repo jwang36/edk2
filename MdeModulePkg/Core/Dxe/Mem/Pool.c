@@ -406,7 +406,9 @@ CoreAllocatePoolI (
   // If allocation is over max size, just allocate pages for the request
   // (slow)
   //
-  if (Index >= SIZE_TO_LIST (Granularity) || NeedGuard) {
+  if (Index >= SIZE_TO_LIST (Granularity) ||
+      ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 && !mOnGuarding) ||
+      NeedGuard) {
     if (!HasPoolTail) {
       Size -= sizeof (POOL_TAIL);
     }
@@ -757,7 +759,9 @@ CoreFreePoolI (
   //
   // If it's not on the list, it must be pool pages
   //
-  if (Index >= SIZE_TO_LIST (Granularity) || IsGuarded) {
+  if (Index >= SIZE_TO_LIST (Granularity) ||
+      ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 && ((UINTN)Head & 0xFFF) == 0) ||
+      IsGuarded) {
 
     //
     // Return the memory pages back to free memory

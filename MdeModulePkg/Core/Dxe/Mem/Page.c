@@ -1353,6 +1353,7 @@ Done:
   CoreReleaseMemoryLock ();
 
   if (!EFI_ERROR (Status)) {
+#if 0
     if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 && gCpu != NULL) {
       gCpu->SetMemoryAttributes (
               gCpu,
@@ -1361,7 +1362,7 @@ Done:
               0
               );
     }
-
+#endif
     if (NeedGuard) {
       SetGuardForMemory (Start, NumberOfPages);
     }
@@ -1505,7 +1506,8 @@ Done:
 
   if (!EFI_ERROR(Status) &&
       (PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 &&
-      gCpu != NULL) {
+      gCpu != NULL &&
+      Memory > BASE_1MB) {
     gCpu->SetMemoryAttributes (
             gCpu,
             Memory,
@@ -1982,6 +1984,7 @@ CoreAllocatePoolPages (
     } else {
       CoreConvertPages (Start, NumberOfPages, PoolType);
     }
+#if 0
     if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 && gCpu != NULL) {
       gCpu->SetMemoryAttributes (
               gCpu,
@@ -1990,6 +1993,7 @@ CoreAllocatePoolPages (
               0
               );
     }
+#endif
   }
 
   return (VOID *)(UINTN) Start;
@@ -2010,7 +2014,9 @@ CoreFreePoolPages (
   )
 {
   CoreConvertPages (Memory, NumberOfPages, EfiConventionalMemory);
-  if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 && gCpu != NULL) {
+  if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 &&
+      gCpu != NULL &&
+      Memory > BASE_1MB) {
     gCpu->SetMemoryAttributes (
             gCpu,
             Memory,
