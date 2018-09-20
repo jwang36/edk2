@@ -981,11 +981,11 @@ Done:
 
   if ((Operation & GCD_MEMORY_SPACE_OPERATION) != 0) {
     CoreReleaseGcdMemoryLock ();
-    CoreDumpGcdMemorySpaceMap (FALSE);
+    //CoreDumpGcdMemorySpaceMap (FALSE);
   }
   if ((Operation & GCD_IO_SPACE_OPERATION) != 0) {
     CoreReleaseGcdIoLock ();
-    CoreDumpGcdIoSpaceMap (FALSE);
+    //CoreDumpGcdIoSpaceMap (FALSE);
   }
 
   return Status;
@@ -1296,11 +1296,11 @@ Done:
 
   if ((Operation & GCD_MEMORY_SPACE_OPERATION) != 0) {
     CoreReleaseGcdMemoryLock ();
-    CoreDumpGcdMemorySpaceMap (FALSE);
+    //CoreDumpGcdMemorySpaceMap (FALSE);
   }
   if ((Operation & GCD_IO_SPACE_OPERATION) !=0) {
     CoreReleaseGcdIoLock ();
-    CoreDumpGcdIoSpaceMap (FALSE);
+    //CoreDumpGcdIoSpaceMap (FALSE);
   }
 
   return Status;
@@ -2402,7 +2402,7 @@ CoreInitializeGcdServices (
 
   InsertHeadList (&mGcdMemorySpaceMap, &Entry->Link);
 
-  CoreDumpGcdMemorySpaceMap (TRUE);
+  //CoreDumpGcdMemorySpaceMap (TRUE);
 
   //
   // Initialize the GCD I/O Space Map

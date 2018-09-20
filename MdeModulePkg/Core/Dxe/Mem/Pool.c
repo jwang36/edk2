@@ -27,6 +27,7 @@ typedef struct {
 
 
 #define POOL_HEAD_SIGNATURE   SIGNATURE_32('p','h','d','0')
+#define POOLPAGE_HEAD_SIGNATURE   SIGNATURE_32('p', 'g', 'h','d')
 typedef struct {
   UINT32          Signature;
   UINT32          Reserved;
@@ -418,6 +419,9 @@ CoreAllocatePoolI (
     if (NeedGuard) {
       Head = AdjustPoolHeadA ((EFI_PHYSICAL_ADDRESS)(UINTN)Head, NoPages, Size);
     }
+    if (Head != NULL) {
+      Head->Reserved = POOLPAGE_HEAD_SIGNATURE;
+    }
     goto Done;
   }
 
@@ -760,7 +764,7 @@ CoreFreePoolI (
   // If it's not on the list, it must be pool pages
   //
   if (Index >= SIZE_TO_LIST (Granularity) ||
-      ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 && ((UINTN)Head & 0xFFF) == 0) ||
+      Head->Reserved == POOLPAGE_HEAD_SIGNATURE ||
       IsGuarded) {
 
     //
