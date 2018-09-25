@@ -691,6 +691,7 @@ CoreFreePoolI (
   UINTN       Granularity;
   BOOLEAN     IsGuarded;
   BOOLEAN     HasPoolTail;
+  BOOLEAN     PageAsPool;
 
   ASSERT(Buffer != NULL);
   //
@@ -707,6 +708,7 @@ CoreFreePoolI (
                 IsMemoryGuarded ((EFI_PHYSICAL_ADDRESS)(UINTN)Head);
   HasPoolTail = !(IsGuarded &&
                   ((PcdGet8 (PcdHeapGuardPropertyMask) & BIT7) == 0));
+  PageAsPool = (Head->Reserved == POOLPAGE_HEAD_SIGNATURE);
 
   if (HasPoolTail) {
     Tail = HEAD_TO_TAIL (Head);
@@ -764,7 +766,7 @@ CoreFreePoolI (
   // If it's not on the list, it must be pool pages
   //
   if (Index >= SIZE_TO_LIST (Granularity) ||
-      Head->Reserved == POOLPAGE_HEAD_SIGNATURE ||
+      PageAsPool ||
       IsGuarded) {
 
     //
