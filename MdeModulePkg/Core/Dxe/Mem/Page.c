@@ -29,12 +29,14 @@ typedef struct {
   BOOLEAN               Runtime;
 } EFI_MEMORY_TYPE_STATISTICS;
 
+LIST_ENTRY    gFreeMemoryMap  = INITIALIZE_LIST_HEAD_VARIABLE (gFreeMemoryMap);
+
 //
 // MemoryMap - The current memory map
 //
 UINTN     mMemoryMapKey = 0;
 
-#define MAX_MAP_DEPTH 6
+#define MAX_MAP_DEPTH 16
 
 ///
 /// mMapDepth - depth of new descriptor stack
@@ -147,6 +149,54 @@ RemoveMemoryMapEntry (
     //
     InsertTailList (&mFreeMemoryMapEntryList, &Entry->Link);
   }
+}
+
+VOID
+CoreAddFreeRange (
+  IN EFI_PHYSICAL_ADDRESS     Start,
+  IN EFI_PHYSICAL_ADDRESS     End
+  )
+{
+  LIST_ENTRY        *Link;
+  MEMORY_MAP        *Entry;
+
+  ASSERT ((Start & EFI_PAGE_MASK) == 0);
+  ASSERT (End > Start) ;
+
+  ASSERT_LOCKED (&gMemoryLock);
+
+  Link = gFreeMemoryMap.ForwardLink;
+  while (Link != &gFreeMemoryMap) {
+    Entry = CR (Link, MEMORY_MAP, Link, MEMORY_MAP_SIGNATURE);
+    Link  = Link->ForwardLink;
+
+    if (Entry->End + 1 == Start) {
+
+      Start = Entry->Start;
+      RemoveMemoryMapEntry (Entry);
+
+    } else if (Entry->Start == End + 1) {
+
+      End = Entry->End;
+      RemoveMemoryMapEntry (Entry);
+    }
+  }
+
+  //
+  // Add descriptor
+  //
+
+  mMapStack[mMapDepth].Signature     = MEMORY_MAP_SIGNATURE;
+  mMapStack[mMapDepth].FromPages      = FALSE;
+  mMapStack[mMapDepth].Type          = Type;
+  mMapStack[mMapDepth].Start         = Start;
+  mMapStack[mMapDepth].End           = End;
+  mMapStack[mMapDepth].VirtualStart  = 0;
+  mMapStack[mMapDepth].Attribute     = Attribute;
+  InsertTailList (&gMemoryMap, &mMapStack[mMapDepth].Link);
+
+  mMapDepth += 1;
+  ASSERT (mMapDepth < MAX_MAP_DEPTH);
 }
 
 /**
@@ -902,6 +952,8 @@ CoreConvertPagesEx (
         !ChangingType ||
         MemType != EfiConventionalMemory) {
       CoreAddRange (MemType, Start, RangeEnd, Attribute);
+    } else {
+      CoreAddFreeRange (Start, RangeEnd, Attribute);
     }
 
     if (ChangingType && (MemType == EfiConventionalMemory)) {
