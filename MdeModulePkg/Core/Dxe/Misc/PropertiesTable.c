@@ -205,45 +205,22 @@ MergeMemoryMap (
     CopyMem (NewMemoryMapEntry, MemoryMapEntry, sizeof(EFI_MEMORY_DESCRIPTOR));
     NextMemoryMapEntry = NEXT_MEMORY_DESCRIPTOR (MemoryMapEntry, DescriptorSize);
 
-    EFI_PHYSICAL_ADDRESS        BaseAddress;
-
-    //DEBUG ((DEBUG_INFO, "Merging (%d) %p[%d] ", NewMemoryMapEntry->Type, NewMemoryMapEntry->PhysicalStart, NewMemoryMapEntry->NumberOfPages));
-
     do {
-      MemoryBlockLength = (UINT64) (EfiPagesToSize (NewMemoryMapEntry->NumberOfPages));
-      BaseAddress = NewMemoryMapEntry->PhysicalStart + MemoryBlockLength;
-
-      if (NewMemoryMapEntry->Type < EfiMemoryMappedIO) {
-        while (GetGuardedMemoryBits(BaseAddress, 1) != 0 &&
-               BaseAddress < NextMemoryMapEntry->PhysicalStart) {
-          //DEBUG ((DEBUG_INFO, ">"));
-          NewMemoryMapEntry->NumberOfPages++;
-          BaseAddress += EFI_PAGES_TO_SIZE(1);
-          MemoryBlockLength += EFI_PAGES_TO_SIZE(1);
-        }
-      }
-
+      MergeGuardPages (NewMemoryMapEntry);
+      MemoryBlockLength = (UINT64) (EfiPagesToSize (MemoryMapEntry->NumberOfPages));
       if (((UINTN)NextMemoryMapEntry < (UINTN)MemoryMapEnd) &&
           (NewMemoryMapEntry->Type == NextMemoryMapEntry->Type) &&
           (NewMemoryMapEntry->Attribute == NextMemoryMapEntry->Attribute) &&
           ((NewMemoryMapEntry->PhysicalStart + MemoryBlockLength) == NextMemoryMapEntry->PhysicalStart)) {
-
         NewMemoryMapEntry->NumberOfPages += NextMemoryMapEntry->NumberOfPages;
         NextMemoryMapEntry = NEXT_MEMORY_DESCRIPTOR (NextMemoryMapEntry, DescriptorSize);
-
         continue;
-
       } else {
-
         MemoryMapEntry = PREVIOUS_MEMORY_DESCRIPTOR (NextMemoryMapEntry, DescriptorSize);
         break;
-
       }
     } while (TRUE);
 
-    //DEBUG ((DEBUG_INFO, " %p [%d]\n",
-    //        NewMemoryMapEntry->PhysicalStart + EfiPagesToSize (NewMemoryMapEntry->NumberOfPages),
-    //        NewMemoryMapEntry->NumberOfPages));
     MemoryMapEntry = NEXT_MEMORY_DESCRIPTOR (MemoryMapEntry, DescriptorSize);
     NewMemoryMapEntry = NEXT_MEMORY_DESCRIPTOR (NewMemoryMapEntry, DescriptorSize);
   }

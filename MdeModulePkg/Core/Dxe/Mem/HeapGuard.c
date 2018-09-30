@@ -1316,6 +1316,36 @@ SetAllFreedPages (
   }
 }
 
+VOID
+MergeGuardPages (
+  IN EFI_MEMORY_DESCRIPTOR      *MemoryMapEntry
+  )
+{
+  EFI_PHYSICAL_ADDRESS        EndAddress;
+  UINT64                      Bitmap;
+
+  if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) == 0 ||
+      MemoryMapEntry->Type >= EfiMemoryMappedIO) {
+    return;
+  }
+
+  Bitmap = 0;
+  do {
+    if (Bitmap == 0) {
+      EndAddress = MemoryMapEntry->PhysicalStart +
+                   EFI_PAGES_TO_SIZE (MemoryMapEntry->NumberOfPages);
+      Bitmap = GetGuardedMemoryBits(EndAddress, 64);
+    }
+
+    if ((Bitmap & 1) == 0) {
+      break;
+    }
+
+    MemoryMapEntry->NumberOfPages++;
+    Bitmap = RShiftU64 (Bitmap, 1);
+  } while (TRUE);
+}
+
 /**
   Notify function used to set all Guard pages before CPU Arch Protocol installed.
 **/

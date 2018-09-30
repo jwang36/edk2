@@ -451,6 +451,11 @@ GetGuardedMemoryBits (
   IN UINTN                   NumberOfPages
   );
 
+VOID
+MergeGuardPages (
+  IN EFI_MEMORY_DESCRIPTOR      *MemoryMapEntry
+  );
+
 extern BOOLEAN mOnGuarding;
 
 #endif
