@@ -407,6 +407,50 @@ HeapGuardCpuArchProtocolNotify (
   VOID
   );
 
+/**
+  Set corresponding bits in bitmap table to 1 according to given memory range.
+
+  @param[in]  Address       Memory address to guard from.
+  @param[in]  NumberOfPages Number of pages to guard.
+
+  @return VOID.
+**/
+VOID
+EFIAPI
+SetGuardedMemoryBits (
+  IN EFI_PHYSICAL_ADDRESS    Address,
+  IN UINTN                   NumberOfPages
+  );
+
+/**
+  Clear corresponding bits in bitmap table according to given memory range.
+
+  @param[in]  Address       Memory address to unset from.
+  @param[in]  NumberOfPages Number of pages to unset guard.
+
+  @return VOID.
+**/
+VOID
+EFIAPI
+ClearGuardedMemoryBits (
+  IN EFI_PHYSICAL_ADDRESS    Address,
+  IN UINTN                   NumberOfPages
+  );
+
+/**
+  Retrieve corresponding bits in bitmap table according to given memory range.
+
+  @param[in]  Address       Memory address to retrieve from.
+  @param[in]  NumberOfPages Number of pages to retrieve.
+
+  @return An integer containing the guarded memory bitmap.
+**/
+UINTN
+GetGuardedMemoryBits (
+  IN EFI_PHYSICAL_ADDRESS    Address,
+  IN UINTN                   NumberOfPages
+  );
+
 extern BOOLEAN mOnGuarding;
 
 #endif

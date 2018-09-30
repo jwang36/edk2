@@ -153,50 +153,11 @@ RemoveMemoryMapEntry (
 
 VOID
 CoreAddFreeRange (
-  IN EFI_PHYSICAL_ADDRESS     Start,
-  IN EFI_PHYSICAL_ADDRESS     End
+  IN EFI_PHYSICAL_ADDRESS     BaseAddress,
+  IN UINTN                    Pages
   )
 {
-  LIST_ENTRY        *Link;
-  MEMORY_MAP        *Entry;
-
-  ASSERT ((Start & EFI_PAGE_MASK) == 0);
-  ASSERT (End > Start) ;
-
-  ASSERT_LOCKED (&gMemoryLock);
-
-  Link = gFreeMemoryMap.ForwardLink;
-  while (Link != &gFreeMemoryMap) {
-    Entry = CR (Link, MEMORY_MAP, Link, MEMORY_MAP_SIGNATURE);
-    Link  = Link->ForwardLink;
-
-    if (Entry->End + 1 == Start) {
-
-      Start = Entry->Start;
-      RemoveMemoryMapEntry (Entry);
-
-    } else if (Entry->Start == End + 1) {
-
-      End = Entry->End;
-      RemoveMemoryMapEntry (Entry);
-    }
-  }
-
-  //
-  // Add descriptor
-  //
-
-  mMapStack[mMapDepth].Signature     = MEMORY_MAP_SIGNATURE;
-  mMapStack[mMapDepth].FromPages      = FALSE;
-  mMapStack[mMapDepth].Type          = Type;
-  mMapStack[mMapDepth].Start         = Start;
-  mMapStack[mMapDepth].End           = End;
-  mMapStack[mMapDepth].VirtualStart  = 0;
-  mMapStack[mMapDepth].Attribute     = Attribute;
-  InsertTailList (&gMemoryMap, &mMapStack[mMapDepth].Link);
-
-  mMapDepth += 1;
-  ASSERT (mMapDepth < MAX_MAP_DEPTH);
+  SetGuardedMemoryBits (BaseAddress, Pages);
 }
 
 /**
@@ -952,8 +913,6 @@ CoreConvertPagesEx (
         !ChangingType ||
         MemType != EfiConventionalMemory) {
       CoreAddRange (MemType, Start, RangeEnd, Attribute);
-    } else {
-      CoreAddFreeRange (Start, RangeEnd, Attribute);
     }
 
     if (ChangingType && (MemType == EfiConventionalMemory)) {
@@ -1405,16 +1364,6 @@ Done:
   CoreReleaseMemoryLock ();
 
   if (!EFI_ERROR (Status)) {
-#if 0
-    if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 && gCpu != NULL) {
-      gCpu->SetMemoryAttributes (
-              gCpu,
-              Start,
-              EFI_PAGES_TO_SIZE(NumberOfPages),
-              0
-              );
-    }
-#endif
     if (NeedGuard) {
       SetGuardForMemory (Start, NumberOfPages);
     }
@@ -1558,14 +1507,16 @@ Done:
 
   if (!EFI_ERROR(Status) &&
       (PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 &&
-      gCpu != NULL &&
       Memory > BASE_1MB) {
-    gCpu->SetMemoryAttributes (
-            gCpu,
-            Memory,
-            EFI_PAGES_TO_SIZE(NumberOfPages),
-            EFI_MEMORY_RP
-            );
+    if (gCpu != NULL) {
+      gCpu->SetMemoryAttributes(
+              gCpu,
+              Memory,
+              EFI_PAGES_TO_SIZE(NumberOfPages),
+              EFI_MEMORY_RP
+              );
+    }
+    CoreAddFreeRange (Memory, NumberOfPages);
   }
 
   return Status;
@@ -2036,16 +1987,6 @@ CoreAllocatePoolPages (
     } else {
       CoreConvertPages (Start, NumberOfPages, PoolType);
     }
-#if 0
-    if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 && gCpu != NULL) {
-      gCpu->SetMemoryAttributes (
-              gCpu,
-              Start,
-              EFI_PAGES_TO_SIZE(NumberOfPages),
-              0
-              );
-    }
-#endif
   }
 
   return (VOID *)(UINTN) Start;

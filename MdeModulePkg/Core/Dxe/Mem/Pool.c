@@ -617,6 +617,11 @@ CoreFreePoolPagesI (
   IN UINTN                  NoPages
   )
 {
+  if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 &&
+      Memory > BASE_1MB) {
+    SetGuardedMemoryBits (Memory, NoPages);
+  }
+
   CoreAcquireMemoryLock ();
   CoreFreePoolPages (Memory, NoPages);
   CoreReleaseMemoryLock ();

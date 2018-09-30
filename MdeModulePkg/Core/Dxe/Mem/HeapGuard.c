@@ -522,6 +522,33 @@ SetGuardPage (
   mOnGuarding = FALSE;
 }
 
+VOID
+EFIAPI
+SetGuardPages (
+  IN  EFI_PHYSICAL_ADDRESS      BaseAddress,
+  IN  UINTN                     Pages
+  )
+{
+  EFI_STATUS      Status;
+
+  if (gCpu == NULL) {
+    return;
+  }
+
+  //
+  // Set flag to make sure allocating memory without GUARD for page table
+  // operation; otherwise infinite loops could be caused.
+  //
+  mOnGuarding = TRUE;
+  //
+  // Note: This might overwrite other attributes needed by other features,
+  // such as NX memory protection.
+  //
+  Status = gCpu->SetMemoryAttributes (gCpu, BaseAddress, EFI_PAGES_TO_SIZE(Pages), EFI_MEMORY_RP);
+  ASSERT_EFI_ERROR (Status);
+  mOnGuarding = FALSE;
+}
+
 /**
   Unset the Guard page at the given address to the normal memory.
 
@@ -1203,6 +1230,92 @@ SetAllGuardPages (
   }
 }
 
+VOID
+SetAllFreedPages (
+  VOID
+  )
+{
+  UINTN     Entries[GUARDED_HEAP_MAP_TABLE_DEPTH];
+  UINTN     Shifts[GUARDED_HEAP_MAP_TABLE_DEPTH];
+  UINTN     Indices[GUARDED_HEAP_MAP_TABLE_DEPTH];
+  UINT64    Tables[GUARDED_HEAP_MAP_TABLE_DEPTH];
+  UINT64    Addresses[GUARDED_HEAP_MAP_TABLE_DEPTH];
+  UINT64    TableEntry;
+  UINT64    Address;
+  UINT64    GuardPage;
+  INTN      Level;
+  UINTN     BitIndex;
+  UINTN     GuardPageNumber;
+
+  if (mGuardedMemoryMap == 0 ||
+      mMapLevel == 0 ||
+      mMapLevel > GUARDED_HEAP_MAP_TABLE_DEPTH) {
+    return;
+  }
+
+  CopyMem (Entries, mLevelMask, sizeof (Entries));
+  CopyMem (Shifts, mLevelShift, sizeof (Shifts));
+
+  SetMem (Tables, sizeof(Tables), 0);
+  SetMem (Addresses, sizeof(Addresses), 0);
+  SetMem (Indices, sizeof(Indices), 0);
+
+  Level           = GUARDED_HEAP_MAP_TABLE_DEPTH - mMapLevel;
+  Tables[Level]   = mGuardedMemoryMap;
+  Address         = 0;
+  GuardPage       = (UINT64)-1;
+  GuardPageNumber = 0;
+
+  while (TRUE) {
+    if (Indices[Level] > Entries[Level]) {
+      Tables[Level] = 0;
+      Level        -= 1;
+    } else {
+      TableEntry  = ((UINT64 *)(UINTN)(Tables[Level]))[Indices[Level]];
+      Address     = Addresses[Level];
+
+      if (Level < GUARDED_HEAP_MAP_TABLE_DEPTH - 1) {
+        Level            += 1;
+        Tables[Level]     = TableEntry;
+        Addresses[Level]  = Address;
+        Indices[Level]    = 0;
+
+        continue;
+      } else {
+        BitIndex = 1;
+        while (BitIndex != 0) {
+          if ((TableEntry & BitIndex) != 0) {
+            if (GuardPage == (UINT64)-1) {
+              GuardPage = Address;
+            }
+            ++GuardPageNumber;
+          } else if (GuardPageNumber > 0) {
+            SetGuardPages (GuardPage, GuardPageNumber);
+            GuardPageNumber = 0;
+            GuardPage       = (UINT64)-1;
+          }
+
+          if (TableEntry == 0) {
+            break;
+          }
+
+          Address += EFI_PAGES_TO_SIZE (1);
+          BitIndex = LShiftU64(BitIndex, 1);
+        }
+      }
+    }
+
+    if (Level < (GUARDED_HEAP_MAP_TABLE_DEPTH - (INTN)mMapLevel)) {
+      break;
+    }
+
+    Indices[Level] += 1;
+    Address = (Level == 0) ? 0 : Addresses[Level - 1];
+    Addresses[Level] = Address | LShiftU64(Indices[Level], Shifts[Level]);
+
+  }
+}
+
 /**
   Notify function used to set all Guard pages before CPU Arch Protocol installed.
 **/
@@ -1211,31 +1324,15 @@ HeapGuardCpuArchProtocolNotify (
   VOID
   )
 {
-//  LIST_ENTRY        *Link;
-//  MEMORY_MAP        *Entry;
-
   ASSERT (gCpu != NULL);
-  SetAllGuardPages ();
-#if 0
-  //
-  // Mark all free pages to not-present
-  //
-  if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0) {
-    Link = gMemoryMap.ForwardLink;
-    while (Link != &gMemoryMap) {
-      Entry = CR (Link, MEMORY_MAP, Link, MEMORY_MAP_SIGNATURE);
-      if (Entry->End > 0x100000 && Entry->Type == EfiConventionalMemory) {
-        gCpu->SetMemoryAttributes (
-                gCpu,
-                Entry->Start,
-                Entry->End - Entry->Start + 1,
-                EFI_MEMORY_RP
-                );
-      }
-      Link  = Link->ForwardLink;
-    }
+
+  if ((PcdGet8 (PcdHeapGuardPropertyMask) & 0x0F) != 0) {
+    SetAllGuardPages ();
   }
-#endif
+
+  if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0) {
+    SetAllFreedPages ();
+  }
 }
 
 /**
