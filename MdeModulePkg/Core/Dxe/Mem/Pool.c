@@ -409,7 +409,7 @@ CoreAllocatePoolI (
   // If allocation is over max size, just allocate pages for the request
   // (slow)
   //
-  if (Index >= SIZE_TO_LIST (Granularity) || PageAsPool || NeedGuard) {
+  if (Index >= SIZE_TO_LIST (Granularity) || NeedGuard || PageAsPool) {
     if (!HasPoolTail) {
       Size -= sizeof (POOL_TAIL);
     }
@@ -501,11 +501,7 @@ Done:
     //
     // If we have a pool buffer, fill in the header & tail info
     //
-    if (PageAsPool) {
-      Head->Signature = POOLPAGE_HEAD_SIGNATURE;
-    } else {
-      Head->Signature = POOL_HEAD_SIGNATURE;
-    }
+    Head->Signature = (PageAsPool) ? POOLPAGE_HEAD_SIGNATURE : POOL_HEAD_SIGNATURE;
     Head->Size      = Size;
     Head->Type      = (EFI_MEMORY_TYPE) PoolType;
     Buffer          = Head->Data;
@@ -704,6 +700,8 @@ CoreFreePoolI (
 
   if (Head->Signature != POOL_HEAD_SIGNATURE &&
       Head->Signature != POOLPAGE_HEAD_SIGNATURE) {
+    ASSERT (Head->Signature == POOL_HEAD_SIGNATURE ||
+            Head->Signature == POOLPAGE_HEAD_SIGNATURE);
     return EFI_INVALID_PARAMETER;
   }
 
@@ -768,9 +766,7 @@ CoreFreePoolI (
   //
   // If it's not on the list, it must be pool pages
   //
-  if (Index >= SIZE_TO_LIST (Granularity) ||
-      PageAsPool ||
-      IsGuarded) {
+  if (Index >= SIZE_TO_LIST (Granularity) || IsGuarded || PageAsPool) {
 
     //
     // Return the memory pages back to free memory

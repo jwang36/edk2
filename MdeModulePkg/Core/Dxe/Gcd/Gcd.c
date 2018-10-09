@@ -160,6 +160,10 @@ CoreDumpGcdMemorySpaceMap (
     EFI_GCD_MEMORY_SPACE_DESCRIPTOR  *MemorySpaceMap;
     UINTN                            Index;
 
+    if ((DEBUG_GCD & GetDebugPrintErrorLevel ()) == 0) {
+      return;
+    }
+
     Status = CoreGetMemorySpaceMap (&NumberOfDescriptors, &MemorySpaceMap);
     ASSERT (Status == EFI_SUCCESS && MemorySpaceMap != NULL);
 
@@ -201,6 +205,10 @@ CoreDumpGcdIoSpaceMap (
     UINTN                        NumberOfDescriptors;
     EFI_GCD_IO_SPACE_DESCRIPTOR  *IoSpaceMap;
     UINTN                        Index;
+
+    if ((DEBUG_GCD & GetDebugPrintErrorLevel ()) == 0) {
+      return;
+    }
 
     Status = CoreGetIoSpaceMap (&NumberOfDescriptors, &IoSpaceMap);
     ASSERT (Status == EFI_SUCCESS && IoSpaceMap != NULL);
@@ -981,11 +989,11 @@ Done:
 
   if ((Operation & GCD_MEMORY_SPACE_OPERATION) != 0) {
     CoreReleaseGcdMemoryLock ();
-    //CoreDumpGcdMemorySpaceMap (FALSE);
+    CoreDumpGcdMemorySpaceMap (FALSE);
   }
   if ((Operation & GCD_IO_SPACE_OPERATION) != 0) {
     CoreReleaseGcdIoLock ();
-    //CoreDumpGcdIoSpaceMap (FALSE);
+    CoreDumpGcdIoSpaceMap (FALSE);
   }
 
   return Status;
@@ -1296,11 +1304,11 @@ Done:
 
   if ((Operation & GCD_MEMORY_SPACE_OPERATION) != 0) {
     CoreReleaseGcdMemoryLock ();
-    //CoreDumpGcdMemorySpaceMap (FALSE);
+    CoreDumpGcdMemorySpaceMap (FALSE);
   }
   if ((Operation & GCD_IO_SPACE_OPERATION) !=0) {
     CoreReleaseGcdIoLock ();
-    //CoreDumpGcdIoSpaceMap (FALSE);
+    CoreDumpGcdIoSpaceMap (FALSE);
   }
 
   return Status;
@@ -2402,7 +2410,7 @@ CoreInitializeGcdServices (
 
   InsertHeadList (&mGcdMemorySpaceMap, &Entry->Link);
 
-  //CoreDumpGcdMemorySpaceMap (TRUE);
+  CoreDumpGcdMemorySpaceMap (TRUE);
 
   //
   // Initialize the GCD I/O Space Map
