@@ -26,8 +26,8 @@ typedef struct {
 } POOL_FREE;
 
 
-#define POOL_HEAD_SIGNATURE   SIGNATURE_32('p','h','d','0')
-#define POOLPAGE_HEAD_SIGNATURE   SIGNATURE_32('p', 'g', 'h','d')
+#define POOL_HEAD_SIGNATURE       SIGNATURE_32('p','h','d','0')
+#define POOLPAGE_HEAD_SIGNATURE   SIGNATURE_32('p','h','d','1')
 typedef struct {
   UINT32          Signature;
   UINT32          Reserved;
@@ -368,6 +368,7 @@ CoreAllocatePoolI (
   UINTN       NoPages;
   UINTN       Granularity;
   BOOLEAN     HasPoolTail;
+  BOOLEAN     PageAsPool;
 
   ASSERT_LOCKED (&mPoolMemoryLock);
 
@@ -387,6 +388,7 @@ CoreAllocatePoolI (
 
   HasPoolTail  = !(NeedGuard &&
                    ((PcdGet8 (PcdHeapGuardPropertyMask) & BIT7) == 0));
+  PageAsPool = (IsUafEnabled () && !mOnGuarding);
 
   //
   // Adjusting the Size to be of proper alignment so that
@@ -407,9 +409,7 @@ CoreAllocatePoolI (
   // If allocation is over max size, just allocate pages for the request
   // (slow)
   //
-  if (Index >= SIZE_TO_LIST (Granularity) ||
-      ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 && !mOnGuarding) ||
-      NeedGuard) {
+  if (Index >= SIZE_TO_LIST (Granularity) || PageAsPool || NeedGuard) {
     if (!HasPoolTail) {
       Size -= sizeof (POOL_TAIL);
     }
@@ -418,9 +418,6 @@ CoreAllocatePoolI (
     Head = CoreAllocatePoolPagesI (PoolType, NoPages, Granularity, NeedGuard);
     if (NeedGuard) {
       Head = AdjustPoolHeadA ((EFI_PHYSICAL_ADDRESS)(UINTN)Head, NoPages, Size);
-    }
-    if (Head != NULL) {
-      Head->Reserved = POOLPAGE_HEAD_SIGNATURE;
     }
     goto Done;
   }
@@ -504,7 +501,11 @@ Done:
     //
     // If we have a pool buffer, fill in the header & tail info
     //
-    Head->Signature = POOL_HEAD_SIGNATURE;
+    if (PageAsPool) {
+      Head->Signature = POOLPAGE_HEAD_SIGNATURE;
+    } else {
+      Head->Signature = POOL_HEAD_SIGNATURE;
+    }
     Head->Size      = Size;
     Head->Type      = (EFI_MEMORY_TYPE) PoolType;
     Buffer          = Head->Data;
@@ -617,15 +618,11 @@ CoreFreePoolPagesI (
   IN UINTN                  NoPages
   )
 {
-  if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 &&
-      Memory > BASE_1MB) {
-    SetGuardedMemoryBits (Memory, NoPages);
-  }
-
   CoreAcquireMemoryLock ();
   CoreFreePoolPages (Memory, NoPages);
   CoreReleaseMemoryLock ();
 
+  GuardFreedPages (Memory, NoPages);
   ApplyMemoryProtectionPolicy (PoolType, EfiConventionalMemory,
     (EFI_PHYSICAL_ADDRESS)(UINTN)Memory, EFI_PAGES_TO_SIZE (NoPages));
 }
@@ -702,10 +699,11 @@ CoreFreePoolI (
   //
   // Get the head & tail of the pool entry
   //
-  Head = CR (Buffer, POOL_HEAD, Data, POOL_HEAD_SIGNATURE);
+  Head = BASE_CR (Buffer, POOL_HEAD, Data);
   ASSERT(Head != NULL);
 
-  if (Head->Signature != POOL_HEAD_SIGNATURE) {
+  if (Head->Signature != POOL_HEAD_SIGNATURE &&
+      Head->Signature != POOLPAGE_HEAD_SIGNATURE) {
     return EFI_INVALID_PARAMETER;
   }
 
@@ -713,7 +711,7 @@ CoreFreePoolI (
                 IsMemoryGuarded ((EFI_PHYSICAL_ADDRESS)(UINTN)Head);
   HasPoolTail = !(IsGuarded &&
                   ((PcdGet8 (PcdHeapGuardPropertyMask) & BIT7) == 0));
-  PageAsPool = (Head->Reserved == POOLPAGE_HEAD_SIGNATURE);
+  PageAsPool = (Head->Signature == POOLPAGE_HEAD_SIGNATURE);
 
   if (HasPoolTail) {
     Tail = HEAD_TO_TAIL (Head);

@@ -456,6 +456,18 @@ MergeGuardPages (
   IN EFI_MEMORY_DESCRIPTOR      *MemoryMapEntry
   );
 
+VOID
+EFIAPI
+GuardFreedPages (
+  IN  EFI_PHYSICAL_ADDRESS    BaseAddress,
+  IN  UINTN                   Pages
+  );
+
+BOOLEAN
+IsUafEnabled (
+  VOID
+  );
+
 extern BOOLEAN mOnGuarding;
 
 #endif

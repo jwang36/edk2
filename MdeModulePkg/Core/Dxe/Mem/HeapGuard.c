@@ -522,33 +522,6 @@ SetGuardPage (
   mOnGuarding = FALSE;
 }
 
-VOID
-EFIAPI
-SetGuardPages (
-  IN  EFI_PHYSICAL_ADDRESS      BaseAddress,
-  IN  UINTN                     Pages
-  )
-{
-  EFI_STATUS      Status;
-
-  if (gCpu == NULL) {
-    return;
-  }
-
-  //
-  // Set flag to make sure allocating memory without GUARD for page table
-  // operation; otherwise infinite loops could be caused.
-  //
-  mOnGuarding = TRUE;
-  //
-  // Note: This might overwrite other attributes needed by other features,
-  // such as NX memory protection.
-  //
-  Status = gCpu->SetMemoryAttributes (gCpu, BaseAddress, EFI_PAGES_TO_SIZE(Pages), EFI_MEMORY_RP);
-  ASSERT_EFI_ERROR (Status);
-  mOnGuarding = FALSE;
-}
-
 /**
   Unset the Guard page at the given address to the normal memory.
 
@@ -696,6 +669,14 @@ IsHeapGuardEnabled (
 {
   return IsMemoryTypeToGuard (EfiMaxMemoryType, AllocateAnyPages,
                               GUARD_HEAP_TYPE_POOL|GUARD_HEAP_TYPE_PAGE);
+}
+
+BOOLEAN
+IsUafEnabled (
+  VOID
+  )
+{
+  return ((PcdGet8 (PcdUseAfterFreeDetectionPropertyMask) & BIT0) != 0);
 }
 
 /**
@@ -1231,7 +1212,52 @@ SetAllGuardPages (
 }
 
 VOID
-SetAllFreedPages (
+MarkFreedPages (
+  IN EFI_PHYSICAL_ADDRESS     BaseAddress,
+  IN UINTN                    Pages
+  )
+{
+  SetGuardedMemoryBits (BaseAddress, Pages);
+}
+
+VOID
+EFIAPI
+GuardFreedPages (
+  IN  EFI_PHYSICAL_ADDRESS    BaseAddress,
+  IN  UINTN                   Pages
+  )
+{
+  EFI_STATUS      Status;
+
+  //
+  // Do nothing if
+  // - Use-After-Free detection is not enabled
+  // - Freed memory is legacy memory lower than 1MB
+  //
+  if (!IsUafEnabled () ||
+      BaseAddress < BASE_1MB) {
+    return;
+  }
+
+  MarkFreedPages (BaseAddress, Pages);
+  if (gCpu != NULL) {
+    //
+    // Set flag to make sure allocating memory without GUARD for page table
+    // operation; otherwise infinite loops could be caused.
+    //
+    mOnGuarding = TRUE;
+    //
+    // Note: This might overwrite other attributes needed by other features,
+    // such as NX memory protection.
+    //
+    Status = gCpu->SetMemoryAttributes (gCpu, BaseAddress, EFI_PAGES_TO_SIZE(Pages), EFI_MEMORY_RP);
+    ASSERT_EFI_ERROR (Status);
+    mOnGuarding = FALSE;
+  }
+}
+
+VOID
+GuardAllFreedPages (
   VOID
   )
 {
@@ -1290,7 +1316,7 @@ SetAllFreedPages (
             }
             ++GuardPageNumber;
           } else if (GuardPageNumber > 0) {
-            SetGuardPages (GuardPage, GuardPageNumber);
+            GuardFreedPages (GuardPage, GuardPageNumber);
             GuardPageNumber = 0;
             GuardPage       = (UINT64)-1;
           }
@@ -1324,7 +1350,7 @@ MergeGuardPages (
   EFI_PHYSICAL_ADDRESS        EndAddress;
   UINT64                      Bitmap;
 
-  if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) == 0 ||
+  if (!IsUafEnabled () ||
       MemoryMapEntry->Type >= EfiMemoryMappedIO) {
     return;
   }
@@ -1334,7 +1360,7 @@ MergeGuardPages (
     if (Bitmap == 0) {
       EndAddress = MemoryMapEntry->PhysicalStart +
                    EFI_PAGES_TO_SIZE (MemoryMapEntry->NumberOfPages);
-      Bitmap = GetGuardedMemoryBits(EndAddress, 64);
+      Bitmap = GetGuardedMemoryBits(EndAddress, GUARDED_HEAP_MAP_ENTRY_BITS);
     }
 
     if ((Bitmap & 1) == 0) {
@@ -1360,8 +1386,8 @@ HeapGuardCpuArchProtocolNotify (
     SetAllGuardPages ();
   }
 
-  if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0) {
-    SetAllFreedPages ();
+  if (IsUafEnabled ()) {
+    GuardAllFreedPages ();
   }
 }
 

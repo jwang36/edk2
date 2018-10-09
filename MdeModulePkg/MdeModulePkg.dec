@@ -1030,6 +1030,8 @@
   # @Prompt Enable UEFI Stack Guard.
   gEfiMdeModulePkgTokenSpaceGuid.PcdCpuStackGuard|FALSE|BOOLEAN|0x30001055
 
+  gEfiMdeModulePkgTokenSpaceGuid.PcdUseAfterFreeDetectionPropertyMask|0x0|UINT8|0x30001056
+
 [PcdsFixedAtBuild, PcdsPatchableInModule]
   ## Dynamic type PCD can be registered callback function for Pcd setting action.
   #  PcdMaxPeiPcdCallBackNumberPerPcdEntry indicates the maximum number of callback function

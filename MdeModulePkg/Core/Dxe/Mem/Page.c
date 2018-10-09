@@ -29,14 +29,12 @@ typedef struct {
   BOOLEAN               Runtime;
 } EFI_MEMORY_TYPE_STATISTICS;
 
-LIST_ENTRY    gFreeMemoryMap  = INITIALIZE_LIST_HEAD_VARIABLE (gFreeMemoryMap);
-
 //
 // MemoryMap - The current memory map
 //
 UINTN     mMemoryMapKey = 0;
 
-#define MAX_MAP_DEPTH 16
+#define MAX_MAP_DEPTH 6
 
 ///
 /// mMapDepth - depth of new descriptor stack
@@ -149,15 +147,6 @@ RemoveMemoryMapEntry (
     //
     InsertTailList (&mFreeMemoryMapEntryList, &Entry->Link);
   }
-}
-
-VOID
-CoreAddFreeRange (
-  IN EFI_PHYSICAL_ADDRESS     BaseAddress,
-  IN UINTN                    Pages
-  )
-{
-  SetGuardedMemoryBits (BaseAddress, Pages);
 }
 
 /**
@@ -909,9 +898,7 @@ CoreConvertPagesEx (
     //
     // Add our new range in
     //
-    if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) == 0 ||
-        !ChangingType ||
-        MemType != EfiConventionalMemory) {
+    if (!IsUafEnabled () || !ChangingType || MemType != EfiConventionalMemory) {
       CoreAddRange (MemType, Start, RangeEnd, Attribute);
     }
 
@@ -1504,21 +1491,6 @@ CoreInternalFreePages (
 
 Done:
   CoreReleaseMemoryLock ();
-
-  if (!EFI_ERROR(Status) &&
-      (PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 &&
-      Memory > BASE_1MB) {
-    if (gCpu != NULL) {
-      gCpu->SetMemoryAttributes(
-              gCpu,
-              Memory,
-              EFI_PAGES_TO_SIZE(NumberOfPages),
-              EFI_MEMORY_RP
-              );
-    }
-    CoreAddFreeRange (Memory, NumberOfPages);
-  }
-
   return Status;
 }
 
@@ -1545,6 +1517,7 @@ CoreFreePages (
 
   Status = CoreInternalFreePages (Memory, NumberOfPages, &MemoryType);
   if (!EFI_ERROR (Status)) {
+    GuardFreedPages (Memory, NumberOfPages);
     CoreUpdateProfile (
       (EFI_PHYSICAL_ADDRESS) (UINTN) RETURN_ADDRESS (0),
       MemoryProfileActionFreePages,
@@ -2007,16 +1980,6 @@ CoreFreePoolPages (
   )
 {
   CoreConvertPages (Memory, NumberOfPages, EfiConventionalMemory);
-  if ((PcdGet8(PcdHeapGuardPropertyMask) & BIT4) != 0 &&
-      gCpu != NULL &&
-      Memory > BASE_1MB) {
-    gCpu->SetMemoryAttributes (
-            gCpu,
-            Memory,
-            EFI_PAGES_TO_SIZE(NumberOfPages),
-            EFI_MEMORY_RP
-            );
-  }
 }
 
 

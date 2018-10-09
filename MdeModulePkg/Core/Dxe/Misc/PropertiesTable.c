@@ -207,7 +207,7 @@ MergeMemoryMap (
 
     do {
       MergeGuardPages (NewMemoryMapEntry);
-      MemoryBlockLength = (UINT64) (EfiPagesToSize (MemoryMapEntry->NumberOfPages));
+      MemoryBlockLength = (UINT64) (EfiPagesToSize (NewMemoryMapEntry->NumberOfPages));
       if (((UINTN)NextMemoryMapEntry < (UINTN)MemoryMapEnd) &&
           (NewMemoryMapEntry->Type == NextMemoryMapEntry->Type) &&
           (NewMemoryMapEntry->Attribute == NextMemoryMapEntry->Attribute) &&
