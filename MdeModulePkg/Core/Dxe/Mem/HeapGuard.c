@@ -44,6 +44,8 @@ GLOBAL_REMOVE_IF_UNREFERENCED UINTN mLevelShift[GUARDED_HEAP_MAP_TABLE_DEPTH]
 GLOBAL_REMOVE_IF_UNREFERENCED UINTN mLevelMask[GUARDED_HEAP_MAP_TABLE_DEPTH]
                                     = GUARDED_HEAP_MAP_TABLE_DEPTH_MASKS;
 
+GLOBAL_REMOVE_IF_UNREFERENCED EFI_PHYSICAL_ADDRESS mLastPromotedPage = BASE_4GB;
+
 /**
   Set corresponding bits in bitmap table to 1 according to the address.
 
@@ -379,7 +381,7 @@ ClearGuardedMemoryBits (
 
   @return An integer containing the guarded memory bitmap.
 **/
-UINTN
+UINT64
 GetGuardedMemoryBits (
   IN EFI_PHYSICAL_ADDRESS    Address,
   IN UINTN                   NumberOfPages
@@ -387,7 +389,7 @@ GetGuardedMemoryBits (
 {
   UINT64            *BitMap;
   UINTN             Bits;
-  UINTN             Result;
+  UINT64            Result;
   UINTN             Shift;
   UINTN             BitsToUnitEnd;
 
@@ -1344,11 +1346,13 @@ GuardAllFreedPages (
 
 VOID
 MergeGuardPages (
-  IN EFI_MEMORY_DESCRIPTOR      *MemoryMapEntry
+  IN EFI_MEMORY_DESCRIPTOR      *MemoryMapEntry,
+  IN EFI_PHYSICAL_ADDRESS       MaxAddress
   )
 {
   EFI_PHYSICAL_ADDRESS        EndAddress;
   UINT64                      Bitmap;
+  INTN                        Pages;
 
   if (!IsUafEnabled () ||
       MemoryMapEntry->Type >= EfiMemoryMappedIO) {
@@ -1356,7 +1360,9 @@ MergeGuardPages (
   }
 
   Bitmap = 0;
-  do {
+  Pages  = EFI_SIZE_TO_PAGES (MaxAddress - MemoryMapEntry->PhysicalStart);
+  Pages -= MemoryMapEntry->NumberOfPages;
+  while (Pages > 0) {
     if (Bitmap == 0) {
       EndAddress = MemoryMapEntry->PhysicalStart +
                    EFI_PAGES_TO_SIZE (MemoryMapEntry->NumberOfPages);
@@ -1367,9 +1373,67 @@ MergeGuardPages (
       break;
     }
 
+    Pages--;
     MemoryMapEntry->NumberOfPages++;
     Bitmap = RShiftU64 (Bitmap, 1);
-  } while (TRUE);
+  }
+}
+
+BOOLEAN
+PromoteGuardedFreePages (
+  EFI_PHYSICAL_ADDRESS      *StartAddress,
+  EFI_PHYSICAL_ADDRESS      *EndAddress
+  )
+{
+  EFI_STATUS      Status;
+  UINTN           AvailablePages;
+  UINT64          Bitmap;
+  UINT64          Start;
+
+  if (!IsUafEnabled ()) {
+    return FALSE;
+  }
+
+  Start           = mLastPromotedPage;
+  AvailablePages  = 0;
+  while (AvailablePages == 0) {
+    Start -= EFI_PAGES_TO_SIZE(GUARDED_HEAP_MAP_ENTRY_BITS);
+    Bitmap = GetGuardedMemoryBits(Start, GUARDED_HEAP_MAP_ENTRY_BITS);
+
+    while (Bitmap > 0) {
+      if ((Bitmap & 1) != 0) {
+        ++AvailablePages;
+      } else if (AvailablePages == 0) {
+        Start += EFI_PAGES_TO_SIZE (1);
+      } else {
+        break;
+      }
+
+      Bitmap = RShiftU64(Bitmap, 1);
+    }
+  }
+
+  if (AvailablePages) {
+    DEBUG((DEBUG_INFO, "Promoted pages: %lX (%X)\r\n", Start, AvailablePages));
+
+    if (gCpu != NULL) {
+      //
+      // Set flag to make sure allocating memory without GUARD for page table
+      // operation; otherwise infinite loops could be caused.
+      //
+      mOnGuarding = TRUE;
+      Status = gCpu->SetMemoryAttributes (gCpu, Start, EFI_PAGES_TO_SIZE(AvailablePages), 0);
+      ASSERT_EFI_ERROR (Status);
+      mOnGuarding = FALSE;
+    }
+
+    mLastPromotedPage = Start;
+    *StartAddress     = Start;
+    *EndAddress       = Start + EFI_PAGES_TO_SIZE (AvailablePages) - 1;
+    return TRUE;
+  }
+
+  return FALSE;
 }
 
 /**

@@ -445,7 +445,7 @@ ClearGuardedMemoryBits (
 
   @return An integer containing the guarded memory bitmap.
 **/
-UINTN
+UINT64
 GetGuardedMemoryBits (
   IN EFI_PHYSICAL_ADDRESS    Address,
   IN UINTN                   NumberOfPages
@@ -453,7 +453,8 @@ GetGuardedMemoryBits (
 
 VOID
 MergeGuardPages (
-  IN EFI_MEMORY_DESCRIPTOR      *MemoryMapEntry
+  IN EFI_MEMORY_DESCRIPTOR      *MemoryMapEntry,
+  IN EFI_PHYSICAL_ADDRESS       MaxAddress
   );
 
 VOID
@@ -466,6 +467,12 @@ GuardFreedPages (
 BOOLEAN
 IsUafEnabled (
   VOID
+  );
+
+BOOLEAN
+PromoteGuardedFreePages (
+  EFI_PHYSICAL_ADDRESS      *StartAddress,
+  EFI_PHYSICAL_ADDRESS      *EndAddress
   );
 
 extern BOOLEAN mOnGuarding;

@@ -160,7 +160,7 @@ CoreDumpGcdMemorySpaceMap (
     EFI_GCD_MEMORY_SPACE_DESCRIPTOR  *MemorySpaceMap;
     UINTN                            Index;
 
-    if ((DEBUG_GCD & GetDebugPrintErrorLevel ()) == 0) {
+    if ((GetDebugPrintErrorLevel () & DEBUG_GCD) == 0) {
       return;
     }
 
@@ -206,7 +206,7 @@ CoreDumpGcdIoSpaceMap (
     EFI_GCD_IO_SPACE_DESCRIPTOR  *IoSpaceMap;
     UINTN                        Index;
 
-    if ((DEBUG_GCD & GetDebugPrintErrorLevel ()) == 0) {
+    if ((GetDebugPrintErrorLevel () & DEBUG_GCD) == 0) {
       return;
     }
 
