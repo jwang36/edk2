@@ -1214,6 +1214,42 @@ SetAllGuardPages (
 }
 
 VOID
+GetLastGuardedFreePageAddress (
+  EFI_PHYSICAL_ADDRESS      *Address
+  )
+{
+  EFI_PHYSICAL_ADDRESS    AddressGranularity;
+  EFI_PHYSICAL_ADDRESS    BaseAddress;
+  UINTN                   Level;
+  UINT64                  Map;
+  INTN                    Index;
+
+  ASSERT (mMapLevel >= 1);
+
+  BaseAddress = 0;
+  Map = mGuardedMemoryMap;
+  for (Level = GUARDED_HEAP_MAP_TABLE_DEPTH - mMapLevel;
+       Level < GUARDED_HEAP_MAP_TABLE_DEPTH;
+       ++Level) {
+    AddressGranularity = LShiftU64 (1, mLevelShift[Level]);
+    for (Index = (INTN)mLevelMask[Level]; Index >= 0 ; --Index) {
+      if (((UINT64 *)(UINTN)Map)[Index] != 0) {
+        BaseAddress += MultU64x32 (AddressGranularity, (UINT32)Index);
+        Map = ((UINT64 *)(UINTN)Map)[Index];
+        break;
+      }
+    }
+  }
+
+  while (Map != 0) {
+    Map = RShiftU64 (Map, 1);
+    BaseAddress += EFI_PAGES_TO_SIZE (1);
+  }
+
+  *Address = BaseAddress;
+}
+
+VOID
 MarkFreedPages (
   IN EFI_PHYSICAL_ADDRESS     BaseAddress,
   IN UINTN                    Pages
@@ -1342,6 +1378,15 @@ GuardAllFreedPages (
     Addresses[Level] = Address | LShiftU64(Indices[Level], Shifts[Level]);
 
   }
+
+  //
+  // Update the maximum address of freed page which can be used for memory
+  // promotion upon out-of-memory-space.
+  //
+  GetLastGuardedFreePageAddress (&Address);
+  if (Address != 0) {
+    mLastPromotedPage = Address;
+  }
 }
 
 VOID
@@ -1385,10 +1430,10 @@ PromoteGuardedFreePages (
   EFI_PHYSICAL_ADDRESS      *EndAddress
   )
 {
-  EFI_STATUS      Status;
-  UINTN           AvailablePages;
-  UINT64          Bitmap;
-  UINT64          Start;
+  EFI_STATUS              Status;
+  UINTN                   AvailablePages;
+  UINT64                  Bitmap;
+  EFI_PHYSICAL_ADDRESS    Start;
 
   if (!IsUafEnabled ()) {
     return FALSE;
@@ -1398,8 +1443,16 @@ PromoteGuardedFreePages (
   AvailablePages  = 0;
   while (AvailablePages == 0) {
     Start -= EFI_PAGES_TO_SIZE(GUARDED_HEAP_MAP_ENTRY_BITS);
-    Bitmap = GetGuardedMemoryBits(Start, GUARDED_HEAP_MAP_ENTRY_BITS);
+    //
+    // If address wraps around, try the really freed pages at top most.
+    //
+    if (Start > mLastPromotedPage) {
+      GetLastGuardedFreePageAddress (&Start);
+      ASSERT (Start != 0);
+      Start -= EFI_PAGES_TO_SIZE(GUARDED_HEAP_MAP_ENTRY_BITS);
+    }
 
+    Bitmap = GetGuardedMemoryBits(Start, GUARDED_HEAP_MAP_ENTRY_BITS);
     while (Bitmap > 0) {
       if ((Bitmap & 1) != 0) {
         ++AvailablePages;
@@ -1415,7 +1468,6 @@ PromoteGuardedFreePages (
 
   if (AvailablePages) {
     DEBUG((DEBUG_INFO, "Promoted pages: %lX (%X)\r\n", Start, AvailablePages));
-
     if (gCpu != NULL) {
       //
       // Set flag to make sure allocating memory without GUARD for page table
