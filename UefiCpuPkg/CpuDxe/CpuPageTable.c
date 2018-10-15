@@ -1057,6 +1057,8 @@ InitializePageTablePool (
   if (Buffer == NULL) {
     DEBUG ((DEBUG_ERROR, "ERROR: Out of aligned pages\r\n"));
     return FALSE;
+  } else {
+    DEBUG ((DEBUG_INFO, "Paging: added %d pages to page table pool\r\n", PoolPages));
   }
 
   //
@@ -1305,7 +1307,7 @@ InitializePageTableLib (
       (CurrentPagingContext.ContextData.Ia32.Attributes &
        PAGE_TABLE_LIB_PAGING_CONTEXT_IA32_X64_ATTRIBUTES_PAE) != 0) {
     DisableReadOnlyPageWriteProtect ();
-    InitializePageTablePool (0x800);
+    InitializePageTablePool (1);
     EnableReadOnlyPageWriteProtect ();
   }
 

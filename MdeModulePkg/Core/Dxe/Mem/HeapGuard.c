@@ -1444,7 +1444,7 @@ PromoteGuardedFreePages (
   while (AvailablePages == 0) {
     Start -= EFI_PAGES_TO_SIZE(GUARDED_HEAP_MAP_ENTRY_BITS);
     //
-    // If address wraps around, try the really freed pages at top most.
+    // If the address wraps around, try the really freed pages at top.
     //
     if (Start > mLastPromotedPage) {
       GetLastGuardedFreePageAddress (&Start);
@@ -1555,6 +1555,14 @@ DumpGuardedMemoryBitmap (
   CHAR8     String[GUARDED_HEAP_MAP_ENTRY_BITS + 1];
   CHAR8     *Ruler1;
   CHAR8     *Ruler2;
+
+  if (!IsHeapGuardEnabled () && !IsUafEnabled ()) {
+    return;
+  }
+
+  if ((GetDebugPrintErrorLevel () & HEAP_GUARD_DEBUG_LEVEL) == 0) {
+    return;
+  }
 
   if (mGuardedMemoryMap == 0 ||
       mMapLevel == 0 ||

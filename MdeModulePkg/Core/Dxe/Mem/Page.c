@@ -1929,9 +1929,7 @@ Done:
   *MemoryMapSize = BufferSize;
 
   DEBUG_CODE (
-    if (PcdGet8 (PcdHeapGuardPropertyMask) & (BIT1|BIT0)) {
-      DumpGuardedMemoryBitmap ();
-    }
+    DumpGuardedMemoryBitmap ();
   );
 
   return Status;
