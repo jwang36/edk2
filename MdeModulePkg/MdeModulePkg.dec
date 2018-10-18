@@ -1015,7 +1015,6 @@
   #   BIT1 - Enable UEFI pool guard.<BR>
   #   BIT2 - Enable SMM page guard.<BR>
   #   BIT3 - Enable SMM pool guard.<BR>
-  #   BIT4 - Enable free heap guard.<BR>
   #   BIT6 - Enable non-stop mode.<BR>
   #   BIT7 - The direction of Guard Page for Pool Guard.
   #          0 - The returned pool is near the tail guard page.<BR>
@@ -1030,6 +1029,10 @@
   # @Prompt Enable UEFI Stack Guard.
   gEfiMdeModulePkgTokenSpaceGuid.PcdCpuStackGuard|FALSE|BOOLEAN|0x30001055
 
+  ## This mask is to control Use-After-Free Memory Detection behavior.
+  #   BIT0    - Enable Use-After-Free memory detection for UEFI modules.<BR>
+  #   BIT1..7 - Reserved for future uses.<BR>
+  # @Prompt The Use-After-Free Memory Detection feature mask
   gEfiMdeModulePkgTokenSpaceGuid.PcdUseAfterFreeDetectionPropertyMask|0x0|UINT8|0x30001056
 
 [PcdsFixedAtBuild, PcdsPatchableInModule]

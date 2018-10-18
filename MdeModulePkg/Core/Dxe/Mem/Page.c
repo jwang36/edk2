@@ -401,9 +401,9 @@ PromoteMemoryResource (
   VOID
   )
 {
-  LIST_ENTRY         *Link;
-  EFI_GCD_MAP_ENTRY  *Entry;
-  BOOLEAN            Promoted;
+  LIST_ENTRY            *Link;
+  EFI_GCD_MAP_ENTRY     *Entry;
+  BOOLEAN               Promoted;
   EFI_PHYSICAL_ADDRESS  StartAddress;
   EFI_PHYSICAL_ADDRESS  EndAddress;
 
@@ -436,7 +436,6 @@ PromoteMemoryResource (
       //
       // Add to allocable system memory resource
       //
-      DEBUG((DEBUG_INFO, "Promoted range: %lX - %lX\r\n", Entry->BaseAddress, Entry->EndAddress));
 
       CoreAddRange (
         EfiConventionalMemory,
@@ -452,9 +451,13 @@ PromoteMemoryResource (
     Link = Link->ForwardLink;
   }
 
-  CoreReleaseGcdMemoryLock();
+  CoreReleaseGcdMemoryLock ();
 
   if (!Promoted) {
+    //
+    // If Use-After-Free detection is enabled, we might promote pages from
+    // guarded free pages.
+    //
     Promoted = PromoteGuardedFreePages (&StartAddress, &EndAddress);
     if (Promoted) {
       CoreAcquireGcdMemoryLock ();
@@ -464,7 +467,7 @@ PromoteMemoryResource (
         EndAddress,
         EFI_MEMORY_UC | EFI_MEMORY_WC | EFI_MEMORY_WT | EFI_MEMORY_WB
         );
-      CoreReleaseGcdMemoryLock();
+      CoreReleaseGcdMemoryLock ();
     }
   }
 
@@ -913,7 +916,8 @@ CoreConvertPagesEx (
     }
 
     //
-    // Add our new range in
+    // Add our new range in. Don't do this for freed pages if Use-After-Free
+    // detection is enabled.
     //
     if (!IsUafEnabled () || !ChangingType || MemType != EfiConventionalMemory) {
       CoreAddRange (MemType, Start, RangeEnd, Attribute);

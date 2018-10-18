@@ -44,6 +44,9 @@ GLOBAL_REMOVE_IF_UNREFERENCED UINTN mLevelShift[GUARDED_HEAP_MAP_TABLE_DEPTH]
 GLOBAL_REMOVE_IF_UNREFERENCED UINTN mLevelMask[GUARDED_HEAP_MAP_TABLE_DEPTH]
                                     = GUARDED_HEAP_MAP_TABLE_DEPTH_MASKS;
 
+//
+// Used for Use-After-Free memory detection to promote freed but not used pages.
+//
 GLOBAL_REMOVE_IF_UNREFERENCED EFI_PHYSICAL_ADDRESS mLastPromotedPage = BASE_4GB;
 
 /**
@@ -673,14 +676,6 @@ IsHeapGuardEnabled (
                               GUARD_HEAP_TYPE_POOL|GUARD_HEAP_TYPE_PAGE);
 }
 
-BOOLEAN
-IsUafEnabled (
-  VOID
-  )
-{
-  return ((PcdGet8 (PcdUseAfterFreeDetectionPropertyMask) & BIT0) != 0);
-}
-
 /**
   Set head Guard and tail Guard for the given memory range.
 
@@ -1213,9 +1208,30 @@ SetAllGuardPages (
   }
 }
 
+/**
+  Check to see if the Use-After-Free (UAF) feature is enabled or not.
+
+  @return TRUE/FALSE.
+**/
+BOOLEAN
+IsUafEnabled (
+  VOID
+  )
+{
+  ASSERT (!IsHeapGuardEnabled());
+  return ((PcdGet8 (PcdUseAfterFreeDetectionPropertyMask) & BIT0) != 0);
+}
+
+/**
+  Find the address of top-most guarded free page.
+
+  @param[out]  Address    Start address of top-most guarded free page.
+
+  @return VOID.
+**/
 VOID
 GetLastGuardedFreePageAddress (
-  EFI_PHYSICAL_ADDRESS      *Address
+  OUT EFI_PHYSICAL_ADDRESS      *Address
   )
 {
   EFI_PHYSICAL_ADDRESS    AddressGranularity;
@@ -1232,6 +1248,10 @@ GetLastGuardedFreePageAddress (
        Level < GUARDED_HEAP_MAP_TABLE_DEPTH;
        ++Level) {
     AddressGranularity = LShiftU64 (1, mLevelShift[Level]);
+
+    //
+    // Find the non-NULL entry at largest index.
+    //
     for (Index = (INTN)mLevelMask[Level]; Index >= 0 ; --Index) {
       if (((UINT64 *)(UINTN)Map)[Index] != 0) {
         BaseAddress += MultU64x32 (AddressGranularity, (UINT32)Index);
@@ -1241,6 +1261,9 @@ GetLastGuardedFreePageAddress (
     }
   }
 
+  //
+  // Find the non-zero MSB then get the page address.
+  //
   while (Map != 0) {
     Map = RShiftU64 (Map, 1);
     BaseAddress += EFI_PAGES_TO_SIZE (1);
@@ -1249,6 +1272,14 @@ GetLastGuardedFreePageAddress (
   *Address = BaseAddress;
 }
 
+/**
+  Record freed pages.
+
+  @param[in]  BaseAddress   Base address of just freed pages.
+  @param[in]  Pages         Number of freed pages.
+
+  @return VOID.
+**/
 VOID
 MarkFreedPages (
   IN EFI_PHYSICAL_ADDRESS     BaseAddress,
@@ -1258,6 +1289,14 @@ MarkFreedPages (
   SetGuardedMemoryBits (BaseAddress, Pages);
 }
 
+/**
+  Record freed pages as well as mark them as not-present, if possible.
+
+  @param[in]  BaseAddress   Base address of just freed pages.
+  @param[in]  Pages         Number of freed pages.
+
+  @return VOID.
+**/
 VOID
 EFIAPI
 GuardFreedPages (
@@ -1272,8 +1311,7 @@ GuardFreedPages (
   // - Use-After-Free detection is not enabled
   // - Freed memory is legacy memory lower than 1MB
   //
-  if (!IsUafEnabled () ||
-      BaseAddress < BASE_1MB) {
+  if (!IsUafEnabled () || BaseAddress < BASE_1MB) {
     return;
   }
 
@@ -1288,7 +1326,17 @@ GuardFreedPages (
     // Note: This might overwrite other attributes needed by other features,
     // such as NX memory protection.
     //
-    Status = gCpu->SetMemoryAttributes (gCpu, BaseAddress, EFI_PAGES_TO_SIZE(Pages), EFI_MEMORY_RP);
+    Status = gCpu->SetMemoryAttributes (
+                     gCpu,
+                     BaseAddress,
+                     EFI_PAGES_TO_SIZE(Pages),
+                     EFI_MEMORY_RP
+                     );
+    //
+    // Normally we should check the returned Status. But there might be memory
+    // alloc/free involved in SetMemoryAttributes(), which would fail this
+    // calling. It's rare case so it's OK to let a few tiny holes be not-guarded.
+    //
     if (EFI_ERROR (Status)) {
       DEBUG ((DEBUG_WARN, "Failed to guard freed pages: %p (%d)\n", BaseAddress, Pages));
     }
@@ -1296,6 +1344,10 @@ GuardFreedPages (
   }
 }
 
+/**
+  Mark all pages freed before CPU Arch Protocol as not-present.
+
+**/
 VOID
 GuardAllFreedPages (
   VOID
@@ -1391,6 +1443,16 @@ GuardAllFreedPages (
   }
 }
 
+/**
+  This function checks to see if the given memory map descriptor in a memory map
+  can be merged with any guarded free pages.
+
+  @param  MemoryMapEntry    A pointer to a descriptor in MemoryMap.
+  @param  MaxAddress        Maximum address to stop the merge.
+
+  @return VOID
+
+**/
 VOID
 MergeGuardPages (
   IN EFI_MEMORY_DESCRIPTOR      *MemoryMapEntry,
@@ -1426,10 +1488,29 @@ MergeGuardPages (
   }
 }
 
+/**
+  Put part (at most 64 pages a time) guarded free pages back to free page pool.
+
+  Use-After-Free detection makes use of 'Used then throw away' way to detect
+  any illegal access to freed memory. The thrown-away memory will be marked as
+  not-present so that any access to those memory (after free) will trigger
+  page-fault.
+
+  The problem is that this will consume lots of memory space. Once no memory
+  left in pool to allocate, we have to restore part of the freed pages to their
+  normal function. Otherwise the whole system will stop functioning.
+
+  @param  StartAddress    Start address of promoted memory.
+  @param  EndAddress      End address of promoted memory.
+
+  @return TRUE    Succeeded to promote memory.
+  @return FALSE   No free memory found.
+
+**/
 BOOLEAN
 PromoteGuardedFreePages (
-  EFI_PHYSICAL_ADDRESS      *StartAddress,
-  EFI_PHYSICAL_ADDRESS      *EndAddress
+  OUT EFI_PHYSICAL_ADDRESS      *StartAddress,
+  OUT EFI_PHYSICAL_ADDRESS      *EndAddress
   )
 {
   EFI_STATUS              Status;
@@ -1441,6 +1522,10 @@ PromoteGuardedFreePages (
     return FALSE;
   }
 
+  //
+  // Similar to memory allocation service, always search the freed pages in
+  // descending direction.
+  //
   Start           = mLastPromotedPage;
   AvailablePages  = 0;
   while (AvailablePages == 0) {

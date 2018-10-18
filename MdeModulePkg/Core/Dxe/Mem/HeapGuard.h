@@ -408,55 +408,29 @@ HeapGuardCpuArchProtocolNotify (
   );
 
 /**
-  Set corresponding bits in bitmap table to 1 according to given memory range.
+  This function checks to see if the given memory map descriptor in a memory map
+  can be merged with any guarded free pages.
 
-  @param[in]  Address       Memory address to guard from.
-  @param[in]  NumberOfPages Number of pages to guard.
+  @param  MemoryMapEntry    A pointer to a descriptor in MemoryMap.
+  @param  MaxAddress        Maximum address to stop the merge.
 
-  @return VOID.
+  @return VOID
+
 **/
-VOID
-EFIAPI
-SetGuardedMemoryBits (
-  IN EFI_PHYSICAL_ADDRESS    Address,
-  IN UINTN                   NumberOfPages
-  );
-
-/**
-  Clear corresponding bits in bitmap table according to given memory range.
-
-  @param[in]  Address       Memory address to unset from.
-  @param[in]  NumberOfPages Number of pages to unset guard.
-
-  @return VOID.
-**/
-VOID
-EFIAPI
-ClearGuardedMemoryBits (
-  IN EFI_PHYSICAL_ADDRESS    Address,
-  IN UINTN                   NumberOfPages
-  );
-
-/**
-  Retrieve corresponding bits in bitmap table according to given memory range.
-
-  @param[in]  Address       Memory address to retrieve from.
-  @param[in]  NumberOfPages Number of pages to retrieve.
-
-  @return An integer containing the guarded memory bitmap.
-**/
-UINT64
-GetGuardedMemoryBits (
-  IN EFI_PHYSICAL_ADDRESS    Address,
-  IN UINTN                   NumberOfPages
-  );
-
 VOID
 MergeGuardPages (
   IN EFI_MEMORY_DESCRIPTOR      *MemoryMapEntry,
   IN EFI_PHYSICAL_ADDRESS       MaxAddress
   );
 
+/**
+  Record freed pages as well as mark them as not-present, if possible.
+
+  @param[in]  BaseAddress   Base address of just freed pages.
+  @param[in]  Pages         Number of freed pages.
+
+  @return VOID.
+**/
 VOID
 EFIAPI
 GuardFreedPages (
@@ -464,15 +438,39 @@ GuardFreedPages (
   IN  UINTN                   Pages
   );
 
+/**
+  Check to see if the use-after-free (UAF) feature is enabled or not.
+
+  @return TRUE/FALSE.
+**/
 BOOLEAN
 IsUafEnabled (
   VOID
   );
 
+/**
+  Put part (at most 64 pages a time) guarded free pages back to free page pool.
+
+  Use-After-Free detection makes use of 'Used then throw away' way to detect
+  any illegal access to freed memory. The thrown-away memory will be marked as
+  not-present so that any access to those memory (after free) will trigger
+  page-fault.
+
+  The problem is that this will consume lots of memory space. Once no memory
+  left in pool to allocate, we have to restore part of the freed pages to their
+  normal function. Otherwise the whole system will stop functioning.
+
+  @param  StartAddress    Start address of promoted memory.
+  @param  EndAddress      End address of promoted memory.
+
+  @return TRUE    Succeeded to promote memory.
+  @return FALSE   No free memory found.
+
+**/
 BOOLEAN
 PromoteGuardedFreePages (
-  EFI_PHYSICAL_ADDRESS      *StartAddress,
-  EFI_PHYSICAL_ADDRESS      *EndAddress
+  OUT EFI_PHYSICAL_ADDRESS      *StartAddress,
+  OUT EFI_PHYSICAL_ADDRESS      *EndAddress
   );
 
 extern BOOLEAN mOnGuarding;
