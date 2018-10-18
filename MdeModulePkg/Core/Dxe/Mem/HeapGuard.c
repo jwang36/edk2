@@ -1289,7 +1289,9 @@ GuardFreedPages (
     // such as NX memory protection.
     //
     Status = gCpu->SetMemoryAttributes (gCpu, BaseAddress, EFI_PAGES_TO_SIZE(Pages), EFI_MEMORY_RP);
-    ASSERT_EFI_ERROR (Status);
+    if (EFI_ERROR (Status)) {
+      DEBUG ((DEBUG_WARN, "Failed to guard freed pages: %p (%d)\n", BaseAddress, Pages));
+    }
     mOnGuarding = FALSE;
   }
 }

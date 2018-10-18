@@ -100,6 +100,7 @@ PAGE_ATTRIBUTE_TABLE mPageAttributeTable[] = {
 };
 
 PAGE_TABLE_POOL                   *mPageTablePool = NULL;
+EFI_LOCK                          mPageTablePoolLock = EFI_INITIALIZE_LOCK_VARIABLE (TPL_NOTIFY);
 PAGE_TABLE_LIB_PAGING_CONTEXT     mPagingContext;
 EFI_SMM_BASE2_PROTOCOL            *mSmmBase2 = NULL;
 
@@ -1045,6 +1046,12 @@ InitializePageTablePool (
 {
   VOID                      *Buffer;
   BOOLEAN                   IsModified;
+  EFI_STATUS                Status;
+
+  Status = EfiAcquireLockOrFail (&mPageTablePoolLock);
+  if (EFI_ERROR (Status)) {
+    return FALSE;
+  }
 
   //
   // Always reserve at least PAGE_TABLE_POOL_UNIT_PAGES, including one page for
@@ -1056,6 +1063,7 @@ InitializePageTablePool (
   Buffer = AllocateAlignedPages (PoolPages, PAGE_TABLE_POOL_ALIGNMENT);
   if (Buffer == NULL) {
     DEBUG ((DEBUG_ERROR, "ERROR: Out of aligned pages\r\n"));
+    EfiReleaseLock (&mPageTablePoolLock);
     return FALSE;
   } else {
     DEBUG ((DEBUG_INFO, "Paging: added %d pages to page table pool\r\n", PoolPages));
@@ -1093,6 +1101,8 @@ InitializePageTablePool (
     &IsModified
     );
   ASSERT (IsModified == TRUE);
+
+  EfiReleaseLock (&mPageTablePoolLock);
 
   return TRUE;
 }
