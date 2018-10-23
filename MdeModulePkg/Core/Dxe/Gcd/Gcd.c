@@ -1691,10 +1691,10 @@ CoreGetMemorySpaceMap (
   OUT EFI_GCD_MEMORY_SPACE_DESCRIPTOR  **MemorySpaceMap
   )
 {
-  EFI_STATUS                       Status;
   LIST_ENTRY                       *Link;
   EFI_GCD_MAP_ENTRY                *Entry;
   EFI_GCD_MEMORY_SPACE_DESCRIPTOR  *Descriptor;
+  UINTN                            Number;
 
   //
   // Make sure parameters are valid
@@ -1706,38 +1706,54 @@ CoreGetMemorySpaceMap (
     return EFI_INVALID_PARAMETER;
   }
 
-  CoreAcquireGcdMemoryLock ();
-
   //
   // Count the number of descriptors
   //
-  *NumberOfDescriptors = CoreCountGcdMapEntry (&mGcdMemorySpaceMap);
+  Number = 0;
+  *NumberOfDescriptors = 0;
+  *MemorySpaceMap = NULL;
+  while (TRUE) {
+    //
+    // Allocate the MemorySpaceMap
+    //
+    if (Number != 0) {
+      if (*MemorySpaceMap != NULL) {
+        FreePool (*MemorySpaceMap);
+      }
 
-  //
-  // Allocate the MemorySpaceMap
-  //
-  *MemorySpaceMap = AllocatePool (*NumberOfDescriptors * sizeof (EFI_GCD_MEMORY_SPACE_DESCRIPTOR));
-  if (*MemorySpaceMap == NULL) {
-    Status = EFI_OUT_OF_RESOURCES;
-    goto Done;
+      *MemorySpaceMap = AllocatePool (Number * sizeof(EFI_GCD_MEMORY_SPACE_DESCRIPTOR));
+      if (*MemorySpaceMap == NULL) {
+        return EFI_OUT_OF_RESOURCES;
+      }
+
+      *NumberOfDescriptors = Number;
+    }
+
+    CoreAcquireGcdMemoryLock ();
+
+    Number = CoreCountGcdMapEntry (&mGcdMemorySpaceMap);
+    if (Number == *NumberOfDescriptors) {
+      //
+      // Fill in the MemorySpaceMap
+      //
+      Descriptor = *MemorySpaceMap;
+      Link = mGcdMemorySpaceMap.ForwardLink;
+      while (Link != &mGcdMemorySpaceMap && Number != 0) {
+        Entry = CR (Link, EFI_GCD_MAP_ENTRY, Link, EFI_GCD_MAP_SIGNATURE);
+        BuildMemoryDescriptor (Descriptor, Entry);
+        Descriptor++;
+        Number--;
+        Link = Link->ForwardLink;
+      }
+
+      CoreReleaseGcdMemoryLock ();
+      break;
+    }
+
+    CoreReleaseGcdMemoryLock ();
   }
 
-  //
-  // Fill in the MemorySpaceMap
-  //
-  Descriptor = *MemorySpaceMap;
-  Link = mGcdMemorySpaceMap.ForwardLink;
-  while (Link != &mGcdMemorySpaceMap) {
-    Entry = CR (Link, EFI_GCD_MAP_ENTRY, Link, EFI_GCD_MAP_SIGNATURE);
-    BuildMemoryDescriptor (Descriptor, Entry);
-    Descriptor++;
-    Link = Link->ForwardLink;
-  }
-  Status = EFI_SUCCESS;
-
-Done:
-  CoreReleaseGcdMemoryLock ();
-  return Status;
+  return EFI_SUCCESS;
 }
 
 
@@ -1964,10 +1980,10 @@ CoreGetIoSpaceMap (
   OUT EFI_GCD_IO_SPACE_DESCRIPTOR  **IoSpaceMap
   )
 {
-  EFI_STATUS                   Status;
   LIST_ENTRY                   *Link;
   EFI_GCD_MAP_ENTRY            *Entry;
   EFI_GCD_IO_SPACE_DESCRIPTOR  *Descriptor;
+  UINTN                        Number;
 
   //
   // Make sure parameters are valid
@@ -1979,38 +1995,54 @@ CoreGetIoSpaceMap (
     return EFI_INVALID_PARAMETER;
   }
 
-  CoreAcquireGcdIoLock ();
+  Number = 0;
+  *NumberOfDescriptors = 0;
+  *IoSpaceMap = NULL;
+  while (TRUE) {
+    //
+    // Allocate the IoSpaceMap
+    //
+    if (Number != 0) {
+      if (*IoSpaceMap != NULL) {
+        FreePool (*IoSpaceMap);
+      }
 
-  //
-  // Count the number of descriptors
-  //
-  *NumberOfDescriptors = CoreCountGcdMapEntry (&mGcdIoSpaceMap);
+      *IoSpaceMap = AllocatePool (Number * sizeof(EFI_GCD_IO_SPACE_DESCRIPTOR));
+      if (*IoSpaceMap == NULL) {
+        return EFI_OUT_OF_RESOURCES;
+      }
 
-  //
-  // Allocate the IoSpaceMap
-  //
-  *IoSpaceMap = AllocatePool (*NumberOfDescriptors * sizeof (EFI_GCD_IO_SPACE_DESCRIPTOR));
-  if (*IoSpaceMap == NULL) {
-    Status = EFI_OUT_OF_RESOURCES;
-    goto Done;
+      *NumberOfDescriptors = Number;
+    }
+
+    CoreAcquireGcdIoLock ();
+
+    //
+    // Count the number of descriptors
+    //
+    Number = CoreCountGcdMapEntry (&mGcdIoSpaceMap);
+    if (Number == *NumberOfDescriptors) {
+      //
+      // Fill in the IoSpaceMap
+      //
+      Descriptor = *IoSpaceMap;
+      Link = mGcdIoSpaceMap.ForwardLink;
+      while (Link != &mGcdIoSpaceMap && Number != 0) {
+        Entry = CR (Link, EFI_GCD_MAP_ENTRY, Link, EFI_GCD_MAP_SIGNATURE);
+        BuildIoDescriptor (Descriptor, Entry);
+        Descriptor++;
+        Number--;
+        Link = Link->ForwardLink;
+      }
+
+      CoreReleaseGcdIoLock ();
+      break;
+    }
+
+    CoreReleaseGcdIoLock ();
   }
 
-  //
-  // Fill in the IoSpaceMap
-  //
-  Descriptor = *IoSpaceMap;
-  Link = mGcdIoSpaceMap.ForwardLink;
-  while (Link != &mGcdIoSpaceMap) {
-    Entry = CR (Link, EFI_GCD_MAP_ENTRY, Link, EFI_GCD_MAP_SIGNATURE);
-    BuildIoDescriptor (Descriptor, Entry);
-    Descriptor++;
-    Link = Link->ForwardLink;
-  }
-  Status = EFI_SUCCESS;
-
-Done:
-  CoreReleaseGcdIoLock ();
-  return Status;
+  return EFI_SUCCESS;
 }
 
 
