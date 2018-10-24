@@ -1691,10 +1691,10 @@ CoreGetMemorySpaceMap (
   OUT EFI_GCD_MEMORY_SPACE_DESCRIPTOR  **MemorySpaceMap
   )
 {
-  EFI_STATUS                       Status;
   LIST_ENTRY                       *Link;
   EFI_GCD_MAP_ENTRY                *Entry;
   EFI_GCD_MEMORY_SPACE_DESCRIPTOR  *Descriptor;
+  UINTN                            DescriptorCount;
 
   //
   // Make sure parameters are valid
@@ -1706,38 +1706,66 @@ CoreGetMemorySpaceMap (
     return EFI_INVALID_PARAMETER;
   }
 
+  *NumberOfDescriptors  = 0;
+  *MemorySpaceMap       = NULL;
+
   CoreAcquireGcdMemoryLock ();
 
-  //
-  // Count the number of descriptors
-  //
-  *NumberOfDescriptors = CoreCountGcdMapEntry (&mGcdMemorySpaceMap);
+  while (TRUE) {
+    //
+    // Count the number of descriptors. It might be done more than once because
+    // there's code which has to be running outside the GCD lock.
+    //
+    DescriptorCount = CoreCountGcdMapEntry (&mGcdMemorySpaceMap);
+    if (DescriptorCount == *NumberOfDescriptors) {
+      //
+      // Fill in the MemorySpaceMap if no memory space map change.
+      //
+      Descriptor = *MemorySpaceMap;
+      Link = mGcdMemorySpaceMap.ForwardLink;
+      while (Link != &mGcdMemorySpaceMap) {
+        Entry = CR (Link, EFI_GCD_MAP_ENTRY, Link, EFI_GCD_MAP_SIGNATURE);
+        BuildMemoryDescriptor (Descriptor, Entry);
+        Descriptor++;
+        Link = Link->ForwardLink;
+      }
 
-  //
-  // Allocate the MemorySpaceMap
-  //
-  *MemorySpaceMap = AllocatePool (*NumberOfDescriptors * sizeof (EFI_GCD_MEMORY_SPACE_DESCRIPTOR));
-  if (*MemorySpaceMap == NULL) {
-    Status = EFI_OUT_OF_RESOURCES;
-    goto Done;
+      break;
+    }
+
+    //
+    // Release the lock before memory allocation, because it might cause
+    // GCD lock conflict in one of calling path in AllocatPool().
+    //
+    CoreReleaseGcdMemoryLock ();
+
+    //
+    // Allocate memory to store the MemorySpaceMap. Note it might be already
+    // allocated if there's map descriptor change during memory allocation at
+    // last time.
+    //
+    if (*MemorySpaceMap != NULL) {
+      FreePool (*MemorySpaceMap);
+    }
+
+    *MemorySpaceMap = AllocatePool (DescriptorCount *
+                                    sizeof (EFI_GCD_MEMORY_SPACE_DESCRIPTOR));
+    if (*MemorySpaceMap == NULL) {
+      *NumberOfDescriptors = 0;
+      return EFI_OUT_OF_RESOURCES;
+    }
+
+    //
+    // Save the descriptor number got before for another round of check to make
+    // sure we won't miss any, since we have code running outside the GCD lock.
+    //
+    *NumberOfDescriptors = DescriptorCount;
+    CoreAcquireGcdMemoryLock ();
   }
 
-  //
-  // Fill in the MemorySpaceMap
-  //
-  Descriptor = *MemorySpaceMap;
-  Link = mGcdMemorySpaceMap.ForwardLink;
-  while (Link != &mGcdMemorySpaceMap) {
-    Entry = CR (Link, EFI_GCD_MAP_ENTRY, Link, EFI_GCD_MAP_SIGNATURE);
-    BuildMemoryDescriptor (Descriptor, Entry);
-    Descriptor++;
-    Link = Link->ForwardLink;
-  }
-  Status = EFI_SUCCESS;
-
-Done:
   CoreReleaseGcdMemoryLock ();
-  return Status;
+
+  return EFI_SUCCESS;
 }
 
 
