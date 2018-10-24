@@ -1068,9 +1068,13 @@ InitializePageTablePool (
   if (Buffer == NULL) {
     DEBUG ((DEBUG_ERROR, "ERROR: Out of aligned pages\r\n"));
     goto Done;
-  } else {
-    DEBUG ((DEBUG_INFO, "Paging: added %ld pages to page table pool\r\n", (UINT64)PoolPages));
   }
+
+  DEBUG ((
+    DEBUG_INFO,
+    "Paging: added %lu pages to page table pool\r\n",
+    (UINT64)PoolPages
+    ));
 
   //
   // Link all pools into a list for easier track later.

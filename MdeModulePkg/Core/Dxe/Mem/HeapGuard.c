@@ -1324,7 +1324,7 @@ GuardFreedPages (
     // calling. It's rare case so it's OK to let a few tiny holes be not-guarded.
     //
     if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_WARN, "Failed to guard freed pages: %p (%ld)\n", BaseAddress, (UINT64)Pages));
+      DEBUG ((DEBUG_WARN, "Failed to guard freed pages: %p (%lu)\n", BaseAddress, (UINT64)Pages));
     }
     mOnGuarding = FALSE;
   }
