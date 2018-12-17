@@ -1,7 +1,7 @@
 ## @file
 #  This module provides OpenSSL Library implementation.
 #
-#  Copyright (c) 2010 - 2017, Intel Corporation. All rights reserved.<BR>
+#  Copyright (c) 2010 - 2018, Intel Corporation. All rights reserved.<BR>
 #  This program and the accompanying materials
 #  are licensed and made available under the terms and conditions of the BSD License
 #  which accompanies this distribution.  The full text of the license may be found at
@@ -21,10 +21,10 @@
   VERSION_STRING                 = 1.0
   LIBRARY_CLASS                  = OpensslLib
   DEFINE OPENSSL_PATH            = openssl
-  DEFINE OPENSSL_FLAGS           = -DL_ENDIAN -DOPENSSL_SMALL_FOOTPRINT -D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE -DNO_SYSLOG 
+  DEFINE OPENSSL_FLAGS           = -DL_ENDIAN -DOPENSSL_SMALL_FOOTPRINT -D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE -DNO_SYSLOG
 
 #
-#  VALID_ARCHITECTURES           = IA32 X64 IPF ARM AARCH64
+#  VALID_ARCHITECTURES           = IA32 X64 ARM AARCH64
 #
 
 [Sources]
@@ -632,13 +632,11 @@
   #   C4706: assignment within conditional expression
   #   C4819: The file contains a character that cannot be represented in the current code page
   #
-  MSFT:*_*_IA32_CC_FLAGS   = -U_WIN32 -U_WIN64 -U_MSC_VER $(OPENSSL_FLAGS) /wd4090 /wd4244 /wd4245 /wd4267 /wd4389 /wd4702 /wd4706 /wd4819
-  MSFT:*_*_X64_CC_FLAGS    = -U_WIN32 -U_WIN64 -U_MSC_VER $(OPENSSL_FLAGS) /wd4090 /wd4244 /wd4245 /wd4267 /wd4306 /wd4389 /wd4702 /wd4706 /wd4819
-  MSFT:*_*_IPF_CC_FLAGS    = -U_WIN32 -U_WIN64 -U_MSC_VER $(OPENSSL_FLAGS) /wd4090 /wd4244 /wd4245 /wd4267 /wd4306 /wd4389 /wd4702 /wd4706 /wd4819
+  MSFT:*_*_IA32_CC_FLAGS   = -U_WIN32 -U_WIN64 -U_MSC_VER $(OPENSSL_FLAGS) /wd4701 /wd4164 /wd4132 /wd4054 /wd4431 /wd4033 /wd4310 /wd4090 /wd4244 /wd4245 /wd4267 /wd4389 /wd4702 /wd4706 /wd4819
+  MSFT:*_*_X64_CC_FLAGS    = -U_WIN32 -U_WIN64 -U_MSC_VER $(OPENSSL_FLAGS) /wd4701 /wd4164 /wd4132 /wd4054 /wd4431 /wd4033 /wd4310 /wd4090 /wd4244 /wd4245 /wd4267 /wd4389 /wd4702 /wd4706 /wd4819 /wd4306
 
   INTEL:*_*_IA32_CC_FLAGS  = -U_WIN32 -U_WIN64 -U_MSC_VER -U__ICC $(OPENSSL_FLAGS) /w
   INTEL:*_*_X64_CC_FLAGS   = -U_WIN32 -U_WIN64 -U_MSC_VER -U__ICC $(OPENSSL_FLAGS) /w
-  INTEL:*_*_IPF_CC_FLAGS   = -U_WIN32 -U_WIN64 -U_MSC_VER -U__ICC $(OPENSSL_FLAGS) /w
 
   #
   # Suppress the following build warnings in openssl so we don't break the build with -Werror
@@ -648,7 +646,6 @@
   #
   GCC:*_*_IA32_CC_FLAGS    = -U_WIN32 -U_WIN64 $(OPENSSL_FLAGS) -Wno-error=maybe-uninitialized
   GCC:*_*_X64_CC_FLAGS     = -U_WIN32 -U_WIN64 $(OPENSSL_FLAGS) -Wno-error=maybe-uninitialized -Wno-error=format -Wno-format -DNO_MSABI_VA_FUNCS
-  GCC:*_*_IPF_CC_FLAGS     = -U_WIN32 -U_WIN64 $(OPENSSL_FLAGS) -Wno-error=maybe-uninitialized -Wno-format
   GCC:*_*_ARM_CC_FLAGS     = $(OPENSSL_FLAGS) -Wno-error=maybe-uninitialized
   GCC:*_*_AARCH64_CC_FLAGS = $(OPENSSL_FLAGS) -Wno-error=maybe-uninitialized -Wno-format
 
@@ -686,6 +683,3 @@
   #
   GCC:*_*_AARCH64_CC_XIPFLAGS ==
 
-  
- 
-  MSFT:*_*_*_CC_FLAGS = /wd4701 /wd4164 /wd4132 /wd4054 /wd4431 /wd4033 /wd4310
