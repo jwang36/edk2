@@ -35,6 +35,8 @@
 
   Ia32/MathLShiftS64.c      | MSFT
   Ia32/MathRShiftU64.c      | MSFT
+  Ia32/llshr.c              | MSFT  
+  Ia32/llmul.c              | MSFT
 
   Ia32/MathLShiftS64.c      | INTEL
   Ia32/MathRShiftU64.c      | INTEL
