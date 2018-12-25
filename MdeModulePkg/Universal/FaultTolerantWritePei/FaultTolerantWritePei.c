@@ -36,7 +36,7 @@ EFI_PEI_PPI_DESCRIPTOR     mPpiListVariable = {
 
 
   @param FtwWorkSpaceHeader Pointer of the working block header
-  @param FtwWorkSpaceSize   Size of the work space
+  @param FtwWorkSpaceEnd    The end address of the whole FTW work space
   @param FtwWriteHeader     Pointer to retrieve the last write header
 
   @retval  EFI_SUCCESS      Get the last write record successfully
@@ -46,35 +46,46 @@ EFI_PEI_PPI_DESCRIPTOR     mPpiListVariable = {
 EFI_STATUS
 FtwGetLastWriteHeader (
   IN EFI_FAULT_TOLERANT_WORKING_BLOCK_HEADER  *FtwWorkSpaceHeader,
-  IN UINTN                                    FtwWorkSpaceSize,
+  IN EFI_PHYSICAL_ADDRESS                     FtwWorkSpaceEnd,
   OUT EFI_FAULT_TOLERANT_WRITE_HEADER         **FtwWriteHeader
   )
 {
+  EFI_STATUS                      Status;
   UINTN                           Offset;
   EFI_FAULT_TOLERANT_WRITE_HEADER *FtwHeader;
+  EFI_FAULT_TOLERANT_WRITE_HEADER *LastFtwHeader;
 
   *FtwWriteHeader = NULL;
+  LastFtwHeader   = NULL;
   FtwHeader       = (EFI_FAULT_TOLERANT_WRITE_HEADER *) (FtwWorkSpaceHeader + 1);
   Offset          = sizeof (EFI_FAULT_TOLERANT_WORKING_BLOCK_HEADER);
 
-  while (FtwHeader->Complete == FTW_VALID_STATE) {
-    Offset += FTW_WRITE_TOTAL_SIZE (FtwHeader->NumberOfWrites, FtwHeader->PrivateDataSize);
-    //
-    // If Offset exceed the FTW work space boudary, return error.
-    //
-    if (Offset >= FtwWorkSpaceSize) {
-      *FtwWriteHeader = FtwHeader;
-      return EFI_ABORTED;
+  while (TRUE) {
+    if ((EFI_PHYSICAL_ADDRESS)(UINTN)(FtwHeader + 1) < FtwWorkSpaceEnd) {
+      if (FtwHeader->Complete != FTW_VALID_STATE) {
+        //
+        // Last write header is found
+        //
+        Status = EFI_SUCCESS;
+        break;
+      }
+    } else {
+      //
+      // If Offset exceed the FTW work space boudary, return error.
+      //
+      FtwHeader = LastFtwHeader;
+      Status = EFI_ABORTED;
+      break;
     }
 
+    LastFtwHeader = FtwHeader;
+    Offset += FTW_WRITE_TOTAL_SIZE(FtwHeader->NumberOfWrites, FtwHeader->PrivateDataSize);
     FtwHeader = (EFI_FAULT_TOLERANT_WRITE_HEADER *) ((UINT8 *) FtwWorkSpaceHeader + Offset);
   }
-  //
-  // Last write header is found
-  //
+
   *FtwWriteHeader = FtwHeader;
 
-  return EFI_SUCCESS;
+  return Status;
 }
 
 /**
@@ -83,8 +94,9 @@ FtwGetLastWriteHeader (
   may be a EMPTY record entry for next write.
 
 
-  @param FtwWriteHeader  Pointer to the write record header
-  @param FtwWriteRecord  Pointer to retrieve the last write record
+  @param FtwWriteHeader   Pointer to the write record header
+  @param FtwWorkSpaceEnd  The end address of the whole FTW work space
+  @param FtwWriteRecord   Pointer to retrieve the last write record
 
   @retval EFI_SUCCESS        Get the last write record successfully
   @retval EFI_ABORTED        The FTW work space is damaged
@@ -93,6 +105,7 @@ FtwGetLastWriteHeader (
 EFI_STATUS
 FtwGetLastWriteRecord (
   IN EFI_FAULT_TOLERANT_WRITE_HEADER          *FtwWriteHeader,
+  IN EFI_PHYSICAL_ADDRESS                     FtwWorkSpaceEnd,
   OUT EFI_FAULT_TOLERANT_WRITE_RECORD         **FtwWriteRecord
   )
 {
@@ -105,7 +118,10 @@ FtwGetLastWriteRecord (
   //
   // Try to find the last write record "that has not completed"
   //
-  for (Index = 0; Index < FtwWriteHeader->NumberOfWrites; Index += 1) {
+  for (Index = 0;
+        Index < FtwWriteHeader->NumberOfWrites &&
+        (EFI_PHYSICAL_ADDRESS)(UINTN)(FtwRecord + 1) < FtwWorkSpaceEnd;
+        Index += 1) {
     if (FtwRecord->DestinationComplete != FTW_VALID_STATE) {
       //
       // The last write record is found
@@ -126,7 +142,9 @@ FtwGetLastWriteRecord (
   //  but the Header->Complete Flag has not been set.
   //  also return the last record.
   //
-  if (Index == FtwWriteHeader->NumberOfWrites) {
+  if (FtwWriteHeader->NumberOfWrites > 0 &&
+      Index == FtwWriteHeader->NumberOfWrites &&
+      ((UINTN) FtwRecord - FTW_RECORD_SIZE (FtwWriteHeader->PrivateDataSize) + sizeof(*FtwRecord)) < FtwWorkSpaceEnd) {
     *FtwWriteRecord = (EFI_FAULT_TOLERANT_WRITE_RECORD *) ((UINTN) FtwRecord - FTW_RECORD_SIZE (FtwWriteHeader->PrivateDataSize));
     return EFI_SUCCESS;
   }
@@ -213,6 +231,7 @@ PeimFaultTolerantWriteInitialize (
   EFI_FAULT_TOLERANT_WRITE_HEADER           *FtwLastWriteHeader;
   EFI_FAULT_TOLERANT_WRITE_RECORD           *FtwLastWriteRecord;
   EFI_PHYSICAL_ADDRESS                      WorkSpaceAddress;
+  EFI_PHYSICAL_ADDRESS                      WorkSpaceEnd;
   UINTN                                     WorkSpaceLength;
   EFI_PHYSICAL_ADDRESS                      SpareAreaAddress;
   UINTN                                     SpareAreaLength;
@@ -228,6 +247,7 @@ PeimFaultTolerantWriteInitialize (
     WorkSpaceAddress = (EFI_PHYSICAL_ADDRESS) PcdGet32 (PcdFlashNvStorageFtwWorkingBase);
   }
   WorkSpaceLength = (UINTN) PcdGet32 (PcdFlashNvStorageFtwWorkingSize);
+  WorkSpaceEnd = WorkSpaceAddress + WorkSpaceLength;
 
   SpareAreaAddress = (EFI_PHYSICAL_ADDRESS) PcdGet64 (PcdFlashNvStorageFtwSpareBase64);
   if (SpareAreaAddress == 0) {
@@ -244,12 +264,13 @@ PeimFaultTolerantWriteInitialize (
   if (IsValidWorkSpace (FtwWorkingBlockHeader, WorkSpaceLength)) {
     Status = FtwGetLastWriteHeader (
                FtwWorkingBlockHeader,
-               WorkSpaceLength,
+               WorkSpaceEnd,
                &FtwLastWriteHeader
                );
     if (!EFI_ERROR (Status)) {
       Status = FtwGetLastWriteRecord (
                  FtwLastWriteHeader,
+                 WorkSpaceEnd,
                  &FtwLastWriteRecord
                  );
     }
