@@ -240,6 +240,7 @@
   $(OPENSSL_PATH)/crypto/ec/ecp_nistputil.c
   $(OPENSSL_PATH)/crypto/ec/ecp_nistz256.c
    ecp_nistz256_table.S 
+   rand.c
   $(OPENSSL_PATH)/crypto/ec/ecp_oct.c
   $(OPENSSL_PATH)/crypto/ec/ecp_smpl.c
   $(OPENSSL_PATH)/crypto/ec/ecx_meth.c  
@@ -614,6 +615,7 @@
 [LibraryClasses]
   DebugLib
   IntrinsicLib
+  RngLib
 
 [LibraryClasses.ARM]
   ArmSoftFloatLib
