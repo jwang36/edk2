@@ -327,6 +327,8 @@ GetNextVariablePtr (
       //
       Value = (UINTN) SpareAddress + (Value - (UINTN) TargetAddress);
     }
+  } else if (Value <= (UINTN) Variable) {
+    Value = 0;
   }
 
   return (VARIABLE_HEADER *) Value;
@@ -687,6 +689,7 @@ GetVariableHeader (
   EFI_PHYSICAL_ADDRESS  SpareAddress;
   EFI_HOB_GUID_TYPE     *GuidHob;
   UINTN                 PartialHeaderSize;
+  VARIABLE_HEADER       *VariableStoreEnd;
 
   if (Variable == NULL) {
     return FALSE;
@@ -696,12 +699,13 @@ GetVariableHeader (
   // First assume variable header pointed by Variable is consecutive.
   //
   *VariableHeader = Variable;
+  VariableStoreEnd = GetEndPointer (StoreInfo->VariableStoreHeader);
 
   if (StoreInfo->FtwLastWriteData != NULL) {
     TargetAddress = StoreInfo->FtwLastWriteData->TargetAddress;
     SpareAddress = StoreInfo->FtwLastWriteData->SpareAddress;
     if (((UINTN) Variable > (UINTN) SpareAddress) &&
-        (((UINTN) Variable - (UINTN) SpareAddress + (UINTN) TargetAddress) >= (UINTN) GetEndPointer (StoreInfo->VariableStoreHeader))) {
+        (((UINTN) Variable - (UINTN) SpareAddress + (UINTN) TargetAddress) >= (UINTN) VariableStoreEnd)) {
       //
       // Reach the end of variable store.
       //
@@ -729,10 +733,14 @@ GetVariableHeader (
       }
     }
   } else {
-    if (Variable >= GetEndPointer (StoreInfo->VariableStoreHeader)) {
+    if (Variable < GetStartPointer (StoreInfo->VariableStoreHeader)
+        || GetVariableNamePtr (Variable, StoreInfo->AuthFlag) >= (CHAR16 *) VariableStoreEnd
+        || (GetVariableDataPtr (Variable, *VariableHeader, StoreInfo->AuthFlag)
+            + DataSizeOfVariable (Variable, StoreInfo->AuthFlag)) > (UINT8 *) VariableStoreEnd) {
       //
       // Reach the end of variable store.
       //
+      *VariableHeader = NULL;
       return FALSE;
     }
   }
