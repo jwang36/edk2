@@ -203,6 +203,11 @@
   SecurityPkg/Library/Tcg2PpVendorLibNull/Tcg2PpVendorLibNull.inf
   SecurityPkg/Library/TcgPpVendorLibNull/TcgPpVendorLibNull.inf
 
+  #
+  # General Random Number Generator
+  #
+  SecurityPkg/RandomNumberGenerator/RngDxeLib/RngDxeLib.inf
+
 [Components.IA32, Components.X64, Components.ARM, Components.AARCH64]
   SecurityPkg/Library/AuthVariableLib/AuthVariableLib.inf
 
@@ -281,6 +286,7 @@
   # Random Number Generator
   #
   SecurityPkg/RandomNumberGenerator/RngDxe/RngDxe.inf
+  SecurityPkg/RandomNumberGenerator/RngSeedLib/RngSeedLib.inf
 
   #
   # Opal Password solution
