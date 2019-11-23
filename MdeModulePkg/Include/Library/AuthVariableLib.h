@@ -28,7 +28,7 @@ typedef struct {
   CHAR16        *VariableName;
   EFI_GUID      *VendorGuid;
   UINT32        Attributes;
-  UINTN         DataSize;
+  UINT32        DataSize;
   VOID          *Data;
   UINT32        PubKeyIndex;
   UINT64        MonotonicCount;

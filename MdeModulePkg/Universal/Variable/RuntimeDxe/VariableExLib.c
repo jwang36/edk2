@@ -9,6 +9,48 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include "Variable.h"
 #include "VariableParsing.h"
 
+EFI_STATUS
+VariableExLibFindVariableInternal (
+  IN  CHAR16                  *VariableName,
+  IN  EFI_GUID                *VendorGuid,
+  OUT AUTH_VARIABLE_INFO      *AuthVariableInfo,
+  OUT VARIABLE_POINTER_TRACK  *Variable
+
+  )
+{
+  EFI_STATUS                    Status;
+  AUTHENTICATED_VARIABLE_HEADER *AuthVariable;
+
+  Status = FindVariable (
+             VariableName,
+             VendorGuid,
+             Variable,
+             &mVariableModuleGlobal->VariableGlobal,
+             FALSE
+             );
+  if (EFI_ERROR (Status)) {
+    AuthVariableInfo->Data = NULL;
+    AuthVariableInfo->DataSize = 0;
+    AuthVariableInfo->Attributes = 0;
+    AuthVariableInfo->PubKeyIndex = 0;
+    AuthVariableInfo->MonotonicCount = 0;
+    AuthVariableInfo->TimeStamp = NULL;
+    return Status;
+  }
+
+  AuthVariableInfo->DataSize        = DataSizeOfVariable (Variable.CurrPtr, mVariableModuleGlobal->VariableGlobal.AuthFormat);
+  AuthVariableInfo->Data            = GetVariableDataPtr (Variable.CurrPtr, mVariableModuleGlobal->VariableGlobal.AuthFormat);
+  AuthVariableInfo->Attributes      = Variable.CurrPtr->Attributes;
+  if (mVariableModuleGlobal->VariableGlobal.AuthFormat) {
+    AuthVariable = (AUTHENTICATED_VARIABLE_HEADER *) Variable.CurrPtr;
+    AuthVariableInfo->PubKeyIndex     = AuthVariable->PubKeyIndex;
+    AuthVariableInfo->MonotonicCount  = ReadUnaligned64 (&(AuthVariable->MonotonicCount));
+    AuthVariableInfo->TimeStamp       = &AuthVariable->TimeStamp;
+  }
+
+  return EFI_SUCCESS;
+}
+
 /**
   Finds variable in storage blocks of volatile and non-volatile storage areas.
 
@@ -35,38 +77,14 @@ VariableExLibFindVariable (
   OUT AUTH_VARIABLE_INFO    *AuthVariableInfo
   )
 {
-  EFI_STATUS                    Status;
   VARIABLE_POINTER_TRACK        Variable;
-  AUTHENTICATED_VARIABLE_HEADER *AuthVariable;
 
-  Status = FindVariable (
-             VariableName,
-             VendorGuid,
-             &Variable,
-             &mVariableModuleGlobal->VariableGlobal,
-             FALSE
-             );
-  if (EFI_ERROR (Status)) {
-    AuthVariableInfo->Data = NULL;
-    AuthVariableInfo->DataSize = 0;
-    AuthVariableInfo->Attributes = 0;
-    AuthVariableInfo->PubKeyIndex = 0;
-    AuthVariableInfo->MonotonicCount = 0;
-    AuthVariableInfo->TimeStamp = NULL;
-    return Status;
-  }
-
-  AuthVariableInfo->DataSize        = DataSizeOfVariable (Variable.CurrPtr, mVariableModuleGlobal->VariableGlobal.AuthFormat);
-  AuthVariableInfo->Data            = GetVariableDataPtr (Variable.CurrPtr, mVariableModuleGlobal->VariableGlobal.AuthFormat);
-  AuthVariableInfo->Attributes      = Variable.CurrPtr->Attributes;
-  if (mVariableModuleGlobal->VariableGlobal.AuthFormat) {
-    AuthVariable = (AUTHENTICATED_VARIABLE_HEADER *) Variable.CurrPtr;
-    AuthVariableInfo->PubKeyIndex     = AuthVariable->PubKeyIndex;
-    AuthVariableInfo->MonotonicCount  = ReadUnaligned64 (&(AuthVariable->MonotonicCount));
-    AuthVariableInfo->TimeStamp       = &AuthVariable->TimeStamp;
-  }
-
-  return EFI_SUCCESS;
+  return VariableExLibFindVariableInternal (
+           VariableName,
+           VendorGuid,
+           AuthVariableInfo,
+           &Variable
+           );
 }
 
 /**
@@ -255,4 +273,120 @@ VariableExLibAtRuntime (
   )
 {
   return AtRuntime ();
+}
+
+EFI_STATUS
+EFIAPI
+VariableExtLibUpdateVariableStorage (
+  IN  VARIABLE_POINTER_TRACK      *CacheVariable,
+  IN  UINTN                       Offset,
+  IN  UINT32                      Size,
+  IN  UINT8                       *Buffer
+  )
+{
+  VARIABLE_POINTER_TRACK              NvVariable;
+  VARIABLE_STORE_HEADER               *VariableStoreHeader;
+
+  //
+  // Update/Delete existing NV variable.
+  // CacheVariable points to the variable in the memory copy of Flash area
+  // Now let Variable points to the same variable in Flash area.
+  //
+  VariableStoreHeader  = (VARIABLE_STORE_HEADER *)((UINTN) mVariableModuleGlobal->VariableGlobal.NonVolatileVariableBase);
+  NvVariable->StartPtr = GetStartPointer (VariableStoreHeader);
+  NvVariable->CurrPtr  = (VARIABLE_HEADER *)((UINTN)NvVariable->StartPtr +
+                                             ((UINTN)CacheVariable->CurrPtr - (UINTN)CacheVariable->StartPtr));
+
+  return UpdateVariableStore (
+           &mVariableModuleGlobal->VariableGlobal,
+           FALSE,
+           FALSE,
+           mVariableModuleGlobal->FvbInstance,
+           ((UINTN)NvVariableCacheVariable->CurrPtr) + Offset,
+           Size,
+           Buffer
+           );
+}
+
+EFI_STATUS
+VariableExtLibGetNextVariableInfo (
+  IN      VARIABLE_STORE_HEADER     *VarStoreHeader,
+  IN OUT  VARIABLE_HEADER           **Variable,
+     OUT  AUTH_VARIABLE_INFO        *VarInfo
+  )
+{
+  VARIABLE_HEADER               *VariablePtr;
+  AUTHENTICATED_VARIABLE_HEADER *AuthVariablePtr;
+  BOOLEAN                       AuthFlag;
+
+  if (Variable == NULL || VarInfo == NULL) {
+    ASSERT (Variable != NULL);
+    ASSERT (VarInfo != NULL);
+    return EFI_INVALID_PARAMETER;
+  }
+
+  AuthFlag      = mVariableModuleGlobal->VariableGlobal.AuthFormat;
+  if (*Variable == NULL) {
+    VariablePtr = (VARIABLE_HEADER *) HEADER_ALIGN (VarStoreHeader + 1);
+  } else {
+    VariablePtr = GetNextVariablePtr (*Variable, AuthFlag)
+  }
+
+  if (GetEndPointer (VarStoreHeader) == VariablePtr) {
+    *Variable = NULL;
+    return EFI_SUCCESS;
+  }
+
+  VarInfo->VariableName     = GetVariableNamePtr (VariablePtr, AuthFlag);
+  VarInfo->VendorGuid       = GetVendorGuidPtr (VariablePtr, AuthFlag);
+  VarInfo->DataSize         = DataSizeOfVariable (VariablePtr, AuthFlag);
+  VarInfo->Data             = GetVariableDataPtr (VariablePtr, AuthFlag);
+  VarInfo->Attributes       = VariablePtr->Attributes;
+
+  if (mVariableModuleGlobal->VariableGlobal.AuthFormat) {
+    AuthVariablePtr = (AUTHENTICATED_VARIABLE_HEADER *) VariablePtr;
+
+    VarInfo->PubKeyIndex    = AuthVariablePtr->PubKeyIndex;
+    VarInfo->MonotonicCount = ReadUnaligned64 (&(AuthVariablePtr->MonotonicCount));
+    VarInfo->TimeStamp      = &AuthVariablePtr->TimeStamp;
+  } else {
+    VarInfo->PubKeyIndex    = 0;
+    VarInfo->MonotonicCount = 0;
+    VarInfo->TimeStamp      = NULL;
+  }
+
+  *Variable = VariablePtr;
+  return EFI_SUCCESS;
+}
+
+EFI_STATUS
+EFIAPI
+VariableExLibFindVariableEx (
+  IN  CHAR16                *VariableName,
+  IN  EFI_GUID              *VendorGuid,
+  OUT AUTH_VARIABLE_INFO    *VariableInfo,
+  OUT UINTN                 *VarOffset,
+  OUT UINTN                 *DataOffset
+  )
+{
+  VARIABLE_POINTER_TRACK  Variable;
+  BOOLEAN                 AuthFlag;
+  EFI_STATUS              Status;
+
+  AuthFlag = mVariableModuleGlobal->VariableGlobal.AuthFormat;
+  Status = VariableExLibFindVariableInternal (
+             VariableName,
+             VendorGuid,
+             AuthVariableInfo,
+             &Variable
+             );
+  if (EFI_ERROR (Status) || Variable.StartPtr == NULL || Variable.CurrPtr == NULL) {
+    *VarOffset  = 0;
+    *DataOffset = 0;
+  } else {
+    *VarOffset  = (UINTN)Variable.StartPtr - (UINTN)Variable.CurrPtr;
+    *DataOffset = (UINTN)Variable.StartPtr - (UINTN)GetVariableDataPtr (Variable.CurrPtr, AuthFlag)
+  }
+
+  return Status;
 }

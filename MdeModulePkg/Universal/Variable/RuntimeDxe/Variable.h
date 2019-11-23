@@ -91,6 +91,7 @@ typedef struct {
   VARIABLE_HEADER *EndPtr;
   VARIABLE_HEADER *StartPtr;
   BOOLEAN         Volatile;
+  BOOLEAN         Protected;
 } VARIABLE_POINTER_TRACK;
 
 typedef struct {

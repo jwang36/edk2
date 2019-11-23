@@ -815,7 +815,7 @@ RuntimeServiceGetVariable (
 
   AcquireLockOnlyAtBootTime (&mVariableServicesLock);
   if (FeaturePcdGet (PcdEnableVariableRuntimeCache)) {
-    Status = FindVariableInRuntimeCache (VariableName, VendorGuid, Attributes, DataSize, Data);
+    Status = ProtectedVariableLibGetVariable (VariableName, VendorGuid, Attributes, DataSize, Data);
   } else {
     Status = FindVariableInSmm (VariableName, VendorGuid, Attributes, DataSize, Data);
   }

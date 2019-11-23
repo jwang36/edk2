@@ -10,6 +10,13 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #define _PROTECTED_VARIABLE_LIB_H_
 
 #include <Protocol/VarCheck.h>
+#include <Library/EncryptionVariableLib.h>
+
+#define METADATA_HMAC_VARIABLE_NAME   L"MetaDataHmacVariable"
+#define METADATA_HMAC_VARIABLE_GUID   gEdkiiMetaDataHmacVariableGuid
+#define METADATA_HMAC_VARIABLE_ATTR   VARIABLE_ATTRIBUTE_NV_BS_RT
+
+#define DEFAULT_COUNTER_INDEX         0
 
 ///
 /// Size of AuthInfo prior to the data payload.
@@ -23,22 +30,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 #define OFFSET_OF_PROTECTEDINFO2_CERT_DATA ((OFFSET_OF (EFI_VARIABLE_PROTECTEDENTICATION_2, AuthInfo)) + \
                                        (OFFSET_OF (WIN_CERTIFICATE_UEFI_GUID, CertData)))
-
-typedef struct {
-  CHAR16        *VariableName;
-  EFI_GUID      *VendorGuid;
-  UINT32        Attributes;
-  UINTN         DataSize;
-  VOID          *Data;
-  UINT32        PubKeyIndex;
-  UINT64        MonotonicCount;
-  EFI_TIME      *TimeStamp;
-  VOID          *CipherData;
-  UINT32        CipherDataSize;
-  VOID          *Key;
-  UINT32        KeyType;
-  UINT32        KeySize;
-} PROTECTED_VARIABLE_INFO;
 
 /**
   Finds variable in storage blocks of volatile and non-volatile storage areas.
@@ -63,7 +54,7 @@ EFI_STATUS
 (EFIAPI *PROTECTED_VAR_LIB_FIND_VARIABLE) (
   IN  CHAR16                *VariableName,
   IN  EFI_GUID              *VendorGuid,
-  OUT PROTECTED_VARIABLE_INFO    *ProtectedVariableInfo
+  OUT AUTH_VARIABLE_INFO    *ProtectedVariableInfo
   );
 
 /**
@@ -199,24 +190,98 @@ EFI_STATUS
   IN  UINTN                               DataPtrIndex,
   IN  UINT32                              DataSize,
   IN  UINT8                               *Buffer
-  )
+  );
 
-#define PROTECTED_VAR_LIB_CONTEXT_IN_STRUCT_VERSION  0x01
+/**
+
+  This code finds variable in storage blocks (Volatile or Non-Volatile).
+
+  Caution: This function may receive untrusted input.
+  This function may be invoked in SMM mode, and datasize is external input.
+  This function will do basic validation, before parse the data.
+
+  @param VariableName               Name of Variable to be found.
+  @param VendorGuid                 Variable vendor GUID.
+  @param Attributes                 Attribute value of the variable found.
+  @param DataSize                   Size of Data found. If size is less than the
+                                    data, this value contains the required size.
+  @param Data                       The buffer to return the contents of the variable. May be NULL
+                                    with a zero DataSize in order to determine the size buffer needed.
+
+  @return EFI_INVALID_PARAMETER     Invalid parameter.
+  @return EFI_SUCCESS               Find the specified variable.
+  @return EFI_NOT_FOUND             Not found.
+  @return EFI_BUFFER_TO_SMALL       DataSize is too small for the result.
+
+**/
+typedef
+EFI_STATUS
+(EFIAPI *PROTECTED_VAR_LIB_GET_VARIABLE) (
+  IN      CHAR16            *VariableName,
+  IN      EFI_GUID          *VendorGuid,
+  OUT     UINT32            *Attributes OPTIONAL,
+  IN OUT  UINTN             *DataSize,
+  OUT     VOID              *Data OPTIONAL
+  );
+
+/**
+
+  This code sets variable in storage blocks (Volatile or Non-Volatile).
+
+  Caution: This function may receive untrusted input.
+  This function may be invoked in SMM mode, and datasize and data are external input.
+  This function will do basic validation, before parse the data.
+  This function will parse the authentication carefully to avoid security issues, like
+  buffer overflow, integer overflow.
+  This function will check attribute carefully to avoid authentication bypass.
+
+  @param VariableName                     Name of Variable to be found.
+  @param VendorGuid                       Variable vendor GUID.
+  @param Attributes                       Attribute value of the variable found
+  @param DataSize                         Size of Data found. If size is less than the
+                                          data, this value contains the required size.
+  @param Data                             Data pointer.
+
+  @return EFI_INVALID_PARAMETER           Invalid parameter.
+  @return EFI_SUCCESS                     Set successfully.
+  @return EFI_OUT_OF_RESOURCES            Resource not enough to set variable.
+  @return EFI_NOT_FOUND                   Not found.
+  @return EFI_WRITE_PROTECTED             Variable is read-only.
+
+**/
+typedef
+EFI_STATUS
+(EFIAPI *PROTECTED_VAR_LIB_SET_VARIABLE) (
+  IN CHAR16                  *VariableName,
+  IN EFI_GUID                *VendorGuid,
+  IN UINT32                  Attributes,
+  IN UINTN                   DataSize,
+  IN VOID                    *Data
+  );
+
+typedef PROTECTED_VAR_LIB_SET_VARIABLE PROTECTED_VAR_LIB_ADD_VARIABLE;
+
+#define PROTECTED_VARIABLE_CONTEXT_IN_STRUCT_VERSION  0x01
 
 typedef struct {
   UINTN                                       StructVersion;
   UINTN                                       StructSize;
   UINTN                                       MaxProtectedVariableSize;
+  UINTN                                       ProtectedVariableStorageSize;
+  PROTECTED_VAR_LIB_GET_VARIABLE              GetVariable;
+  PROTECTED_VAR_LIB_SET_VARIABLE              SetVariable;
+  PROTECTED_VAR_LIB_ADD_VARIABLE              AddVariable;
   PROTECTED_VAR_LIB_FIND_VARIABLE             FindVariable;
+  PROTECTED_VAR_LIB_FIND_VARIABLE_IN_CACHE    FindVariableInCache;
   PROTECTED_VAR_LIB_FIND_NEXT_VARIABLE        FindNextVariable;
   PROTECTED_VAR_LIB_UPDATE_VARIABLE           UpdateVariable;
   PROTECTED_VAR_LIB_GET_SCRATCH_BUFFER        GetScratchBuffer;
   PROTECTED_VAR_LIB_CHECK_REMAINING_SPACE     CheckRemainingSpaceForConsistency;
   PROTECTED_VAR_LIB_AT_RUNTIME                AtRuntime;
   PROTECTED_VAR_LIB_UPDATE_VARIABLE_STORAGE   UpdateVariableStorage;
-} PROTECTED_VAR_LIB_CONTEXT_IN;
+} PROTECTED_VARIABLE_CONTEXT_IN;
 
-#define PROTECTED_VAR_LIB_CONTEXT_OUT_STRUCT_VERSION 0x01
+#define PROTECTED_VARIABLE_CONTEXT_OUT_STRUCT_VERSION 0x01
 
 typedef struct {
   UINTN                                 StructVersion;
@@ -228,12 +293,13 @@ typedef struct {
   UINTN                                 RootKeySize;
   UINT8                                 *MetaDataHmacKey;
   UINTN                                 MetaDataHmacKeySize;
+  VARIABLE_STORE_HEADER                 *EncVariableCache;
   //
   // Caller needs to ConvertPointer() for the pointers.
   //
   VOID                                  ***AddressPointer;
   UINTN                                 AddressPointerCount;
-} PROTECTED_VAR_LIB_CONTEXT_OUT;
+} PROTECTED_VARIABLE_CONTEXT_OUT;
 
 /**
   Initialization for authenticated varibale services.
@@ -252,8 +318,8 @@ typedef struct {
 EFI_STATUS
 EFIAPI
 ProtectedVariableLibInitialize (
-  IN  PROTECTED_VAR_LIB_CONTEXT_IN   *ProtectedVarLibContextIn,
-  OUT PROTECTED_VAR_LIB_CONTEXT_OUT  *ProtectedVarLibContextOut
+  IN  PROTECTED_VARIABLE_CONTEXT_IN   *ProtectedVarLibContextIn,
+  OUT PROTECTED_VARIABLE_CONTEXT_OUT  *ProtectedVarLibContextOut
   );
 
 EFI_STATUS

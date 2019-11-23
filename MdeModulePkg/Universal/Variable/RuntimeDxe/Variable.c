@@ -34,6 +34,7 @@ VARIABLE_MODULE_GLOBAL  *mVariableModuleGlobal;
 /// For EmuNvMode == TRUE, it will be equal to NonVolatileVariableBase.
 ///
 VARIABLE_STORE_HEADER  *mNvVariableCache      = NULL;
+VARIABLE_STORE_HEADER  *mPlainNvVariableCache = NULL;
 
 ///
 /// Memory cache of Fv Header.

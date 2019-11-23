@@ -6,10 +6,32 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
 
-#ifndef _PROTECTED_VARIABLE_LIB_H_
-#define _PROTECTED_VARIABLE_LIB_H_
+#ifndef _ENCRYPTION_VARIABLE_LIB_H_
+#define _ENCRYPTION_VARIABLE_LIB_H_
 
-#include <Protocol/VarCheck.h>
+#include <IndustryStandard/Tpm20.h>
+
+#include <Guid/VariableFormat.h>
+
+#include <Library/BaseCryptLib.h>
+#include <Library/AuthVariableLib.h>
+
+#define ENC_TYPE_NULL         0
+#define ENC_TYPE_AES          TPM_ALG_AES
+
+typedef struct {
+  AUTH_VARIABLE_INFO  Header;
+  UINT32              NameSize;
+  VOID                *PlainData;
+  UINT32              PlainDataSize;
+  VOID                *CipherData;
+  UINT32              CipherDataSize;
+  UINT32              CipherHeaderSize;
+  UINT32              CipherDataType;
+  VOID                *Key;
+  UINT32              KeySize;
+  BOOLEAN             DecryptInPlace;
+} VARIABLE_ENCRYPTION_INFO;
 
 /**
   Initialization for authenticated varibale services.
@@ -25,16 +47,22 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
   @retval EFI_UNSUPPORTED           Unsupported to process authenticated variable.
 
 **/
+//EFI_STATUS
+//EFIAPI
+//EncryptVariable (
+//  IN CHAR16            *VariableName,
+//  IN EFI_GUID          *VendorGuid,
+//  IN UINT32            Attribute,
+//  IN VOID              *PlainData,
+//  IN UINTN             PlainDataSize,
+//  OUT VOID             **CipherData, // Pointer to VARIABLE_ENC_DATA_HEADER
+//  OUT UINTN            *CipherDataSize
+//  );
+
 EFI_STATUS
 EFIAPI
 EncryptVariable (
-  IN CHAR16            *VariableName,
-  IN EFI_GUID          *VendorGuid,
-  IN UINT32            Attribute,
-  IN VOID              *PlainData,
-  IN UINTN             PlainDataSize,
-  OUT VOID             **CipherData, // Pointer to VARIABLE_ENC_DATA_HEADER
-  OUT UINTN            *CipherDataSize
+  IN OUT VARIABLE_ENCRYPTION_INFO   *VarInfo
   );
 
 /**
@@ -57,27 +85,39 @@ EncryptVariable (
   @retval EFI_UNSUPPORTED           Unsupported to process authenticated variable.
 
 **/
+//EFI_STATUS
+//EFIAPI
+//DecryptVariable (
+//  IN CHAR16            *VariableName,
+//  IN EFI_GUID          *VendorGuid,
+//  IN UINT32            Attribute,
+//  IN VOID              *CipherData,
+//  IN UINTN             CipherDataSize,
+//  OUT VOID             **PlainData,
+//  OUT UINTN            *PlainDataSize
+//  );
+
 EFI_STATUS
 EFIAPI
 DecryptVariable (
-  IN CHAR16            *VariableName,
-  IN EFI_GUID          *VendorGuid,
-  IN UINT32            Attribute,
-  IN VOID              *CipherData, // Pointer to VARIABLE_ENC_DATA_HEADER
-  IN UINTN             CipherDataSize,
-  OUT VOID             **PlainData,
-  OUT UINTN            *PlainDataSize
+  IN OUT VARIABLE_ENCRYPTION_INFO   *VarInfo
   );
 
+//EFI_STATUS
+//EFIAPI
+//GetCipherInfo (
+//  IN VOID              *Data,
+//  IN UINTN             DataSize,
+//  OUT UINT32           *KeyType OPTIONAL,
+//  OUT UINT32           *KeySize OPTIONAL,
+//  OUT UINTN            *CipherDataSize OPTIONAL,
+//  OUT UINTN            *PlainDataSize OPTIONAL
+//  );
 
 EFI_STATUS
 EFIAPI
 GetCipherInfo (
-  IN VOID              *Data, // Pointer to VARIABLE_ENC_DATA_HEADER
-  IN UINTN             DataSize,
-  OUT UINT32           *KeyType OPTIONAL,
-  OUT UINTN            *CipherDataSize OPTIONAL,
-  OUT UINTN            *PlainDataSize OPTIONAL
+  IN OUT VARIABLE_ENCRYPTION_INFO   *VarInfo
   );
 
-#endif
+#endif  //_ENCRYPTION_VARIABLE_LIB_H_
