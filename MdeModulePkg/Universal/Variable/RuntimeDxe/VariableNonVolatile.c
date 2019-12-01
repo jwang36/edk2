@@ -160,13 +160,23 @@ InitRealNonVolatileVariableStore (
     return EFI_OUT_OF_RESOURCES;
   }
 
-  NvStorageBase = NV_STORAGE_VARIABLE_BASE;
-  ASSERT (NvStorageBase != 0);
-
   //
-  // Copy NV storage data to the memory buffer.
+  // Copy NV storage data to the memory buffer. Note the NV storage might have
+  // been verified and stored in a HOB. Copy from HOB instead if so.
   //
-  CopyMem (NvStorageData, (UINT8 *) (UINTN) NvStorageBase, NvStorageSize);
+  GuidHob = GetFirstGuidHob (&gEfiVerifiedVariableDataGuid);
+  if (GuidHob != NULL) {
+    NvStorageBase = (EFI_PHYSICAL_ADDRESS)GET_GUID_HOB_DATA (GuidHob);
+    ASSERT (GET_GUID_HOB_DATA_SIZE (GuidHob) <= NvStorageSize);
+    //
+    // HOB may contain only valid data instead of the whole NV storage.
+    //
+    CopyMem (NvStorageData, (UINT8 *) (UINTN) NvStorageBase, GET_GUID_HOB_DATA_SIZE (GuidHob));
+  } else {
+    NvStorageBase = NV_STORAGE_VARIABLE_BASE;
+    ASSERT (NvStorageBase != 0);
+    CopyMem (NvStorageData, (UINT8 *) (UINTN) NvStorageBase, NvStorageSize);
+  }
 
   Status = GetFtwProtocol ((VOID **)&FtwProtocol);
   //

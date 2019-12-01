@@ -20,6 +20,23 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #ifndef _ENCRYPTION_VARIABLE_H_
 #define _ENCRYPTION_VARIABLE_H_
 
+#define ENC_KEY_SEP           L":"
+#define ENC_KEY_SEP_SIZE      2
+#define ENC_KEY_NAME          L"VAR_ENC_KEY"
+#define ENC_KEY_NAME_SIZE     22
+
+#define ENC_KEY_SIZE          (256/8)
+#define ENC_BLOCK_SIZE        (128/8)
+
+//
+// PKCS#5 padding
+//
+//#define AES_CIPHER_DATA_SIZE(PlainDataSize) \
+//  (AES_BLOCK_SIZE + (PlainDataSize)) & (~(AES_BLOCK_SIZE - 1))
+#define AES_CIPHER_DATA_SIZE(PlainDataSize) ALIGN_VALUE (PlainDataSize, AES_BLOCK_SIZE)
+
+#define FREE_POOL(Address)   if (Address != NULL) { FreePool (Address); }
+
 #pragma pack(1)
 
 typedef struct {
@@ -34,8 +51,20 @@ typedef struct {
 
 EFI_STATUS
 EFIAPI
+EncryptVariable (
+  IN OUT VARIABLE_ENCRYPTION_INFO     *VarEncInfo
+  );
+
+EFI_STATUS
+EFIAPI
+DecryptVariable (
+  IN OUT VARIABLE_ENCRYPTION_INFO     *VarEncInfo
+  );
+
+EFI_STATUS
+EFIAPI
 GetCipherInfo (
-  IN VARIABLE_ENCRYPTION_INFO     *VarEncInfo
+  IN OUT VARIABLE_ENCRYPTION_INFO     *VarEncInfo
   );
 
 #endif  // _ENCRYPTION_VARIABLE_H_

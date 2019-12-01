@@ -303,23 +303,31 @@ ProtectedVariableLibInitialize (
   // HOB contains data of variables which have been verified. To save memory
   // space, the blank space in varable storage was not included in the HOB.
   //
-  GuidHob = GetFirstGuidHob (&gEfiProtectedVariableDataGuid);
+  GuidHob = GetFirstGuidHob (&gEfiVerifiedVariableDataGuid);
   if (GuidHob == NULL) {
     ASSERT (GuidHob != NULL);
     return EFI_NOT_FOUND;
   }
 
+  VariableStoreHeader     = GET_GUID_HOB_DATA (GuidHob);
   mProtectedVariableCache = AllocateRuntimeZeroPool (VariableStoreHeader->Size);
   if (mProtectedVariableCache == NULL) {
     ASSERT (mProtectedVariableCache != NULL);
     return EFI_OUT_OF_RESOURCES;
   }
 
-  VariableStoreHeader = GET_GUID_HOB_DATA (GuidHob);
-  VariableHobSize = GuidHob->Header.HobLength - sizeof (EFI_HOB_GUID_TYPE);
+  VariableHobSize = GET_GUID_HOB_DATA_SIZE (GuidHob);
   ASSERT (VariableHobSize <= VariableStoreHeader->Size);
   CopyMem ((VOID *)mProtectedVariableCache, (CONST VOID *)VariableStoreHeader, VariableSize);
 
+  //
+  // [TODO] Sync all variable caches
+  //
+
+  //
+  // [TODO] Check the FTW last write data HOB. Might need to overwrite the cache
+  //        with data from HOB[gEdkiiFaultTolerantWriteGuid]
+  //
   return EFI_SUCCESS;
 }
 

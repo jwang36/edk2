@@ -24,6 +24,211 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include "Guid/VariableFormat.h"
 #include "Library/EncryptionVariableLib.h"
 #include "Library/ProtectedVariableLib.h"
+#include "Library/BaseCryptLib.h"
+
+STATIC
+BOOLEAN
+EncVarLibGenEncKey (
+  IN VARIABLE_ENCRYPTION_INFO     *VarEncInfo,
+  IN UINTN                        EncKeySize,
+  OUT UINT8                       *EncKey,
+  )
+{
+  BOOLEAN           Status;
+  struct {
+    VOID            *Data;
+    UINTN           Size;
+  }                 InfoGroup[6];
+  UINT8             *Info;
+  UINTN             InfoSize;
+  UINTN             Index;
+
+  //
+  // info: Name||':'||Guid||':'||Attr||"VAR_ENC_KEY"
+  //
+  InfoGroup[0].Size = VarEncInfo->NameSize;
+  InfoGroup[0].Data = VarEncInfo->Header.VariableName;
+
+  InfoGroup[1].Size = ENC_KEY_SEP_SIZE;
+  InfoGroup[1].Data = ENC_KEY_SEP;
+
+  InfoGroup[2].Size = sizeof (*VarEncInfo->Header.VendorGuid);;
+  InfoGroup[2].Data = VarEncInfo->Header.VendorGuid;
+
+  InfoGroup[3].Size = ENC_KEY_SEP_SIZE;
+  InfoGroup[3].Data = ENC_KEY_SEP;
+
+  InfoGroup[4].Size = sizeof (VarEncInfo->Header.Attributes);
+  InfoGroup[4].Data = &VarEncInfo->Header.Attributes;
+
+  InfoGroup[5].Size = ENC_KEY_NAME_SIZE;
+  InfoGroup[5].Data = ENC_KEY_NAME;
+
+  for (InfoSize = 0, Index = 0; Index < ARRAY_SIZE (InfoGroup); ++Index) {
+    InfoSize += InfoGroup[Index].Size;
+  }
+
+  Info = AllocatePool (InfoSize);
+  if (Info == NULL) {
+    ASSERT (Info != NULL);
+    return FALSE;
+  }
+
+  for (InfoSize, Index = 0; Index < ARRAY_SIZE (InfoGroup); ++Index) {
+    CopyMem (Info + InfoSize, InfoGroup[Index].Data, InfoGroup[Index].Size);
+    InfoSize += InfoGroup[Index].Size;
+  }
+
+  Status = HkdfSha256ExtractAndExpand (
+             VarEncInfo->Key,
+             VarEncInfo->KeySize,
+             NULL, 
+             0,
+             Info,
+             InfoSize,
+             EncKeyKey,
+             EncKeySize
+             );
+
+  FreePool (Info);
+
+  return Status;
+}
+
+BOOLEAN
+EncVarLibGenIvec (
+  OUT UINT8           *InitVector,
+  IN  UINTN           Size
+  )
+{
+
+}
+
+EFI_STATUS
+EFIAPI
+EncryptVariable (
+  IN OUT VARIABLE_ENCRYPTION_INFO     *VarEncInfo
+  )
+{
+  VOID                          *AesContext;
+  UINT8                         EncKey[ENC_KEY_SIZE];
+  UINT8                         Ivec[ENC_BLOCK_SIZE];
+  UINT8                         *PlainData;
+  UINTN                         PlainDataSize;
+  VARIABLE_ENCRYPTION_HEADER    *CipherData;
+  UINTN                         CipherDataSize;
+  EFI_STATUS                    Status;
+
+  Status      = EFI_ABORTED;
+  AesContext  = NULL;
+  PlainData   = NULL;
+  CipherData  = NULL;
+
+  if (VarEncInfo->Header.VariableName == NULL ||
+      VarEncInfo->NameSize == 0 ||
+      VarEncInfo->Header.VendorGuid == NULL ||
+      VarEncInfo->Key == NULL ||
+      VarEncInfo->PlainData == NULL ||
+      VarEncInfo->PlainDataSize == 0) {
+    ASSERT (VarEncInfo->Header.VariableName != NULL);
+    ASSERT (VarEncInfo->Header.VendorGuid != NULL);
+    ASSERT (VarEncInfo->Key != NULL);
+    ASSERT (VarEncInfo->PlainData != NULL);
+    ASSERT (VarEncInfo->PlainDataSize != 0);
+    return EFI_INVALID_PARAMETER;
+  }
+
+  if (!EncVarLibGenEncKey (VarEncInfo, ENC_KEY_SIZE, EncKey)) {
+    ASSERT (FALSE);
+    return EFI_ABORTED;
+  }
+
+  if (!EncVarLibGenIvec (Ivec, sizeof (Ivec))) {
+    ASSERT (FALSE);
+    return EFI_ABORTED;
+  }
+
+  AesContext = AllocateZeroPool (AesGetContextSize ());
+  if (AesContext == NULL) {
+    ASSERT (AesContext != NULL);
+    return EFI_OUT_OF_RESOURCES;
+  }
+
+  if (!AesInit (AesContext, EncKey, EncKeySize)) {
+    ASSERT (FALSE);
+    goto Done;
+  }
+
+  //
+  // Plain variable data must also be multiple of ENC_BLOCK_SIZE.
+  //
+  if ((VarEncInfo->PlainDataSize % ENC_BLOCK_SIZE) != 0) {
+    PlainDataSize = ALIGN_VALUE (VarEncInfo->PlainDataSize, ENC_BLOCK_SIZE);
+    PlainData     = AllocateZeroPool (PlainDataSize);
+
+    if (PlainData == NULL) {
+      ASSERT (PlainData != NULL)
+      goto Done;
+    }
+  } else {
+    PlainDataSize = VarEncInfo->PlainDataSize;
+    PlainData     = PlainData;
+  }
+
+  CipherDataSize = sizeof (VARIABLE_ENCRYPTION_HEADER) +
+                   AES_CIPHER_DATA_SIZE (VarEncInfo->PlainDataSize);
+  CipherData = (VARIABLE_ENCRYPTION_HEADER *)AllocatePool (CipherDataSize);
+  if (CipherData == NULL) {
+    ASSERT (CipherData != NULL);
+    goto Done;
+  }
+
+  CopyMem (PlainData, VarEncInfo->PlainData, VarEncInfo->PlainDataSize);
+  if (AesCbcEncrypt (AesContext, PlainData, PlainDataSize, Ivec,
+                     (UINT8 *)(CipherData + 1))) {
+    //
+    // Keep the IV for decryption.
+    //
+    CopyMem (CipherData->KeyIvec, Ivec, ENC_BLOCK_SIZE);
+    CipherData->CipherDataSize    = CipherDataSize;
+    CipherData->PlainDataSize     = VarEncInfo->PlainDataSize;
+    CipherData->DataType          = ENC_TYPE_AES;
+    CipherData->HeaderSize        = sizeof (VARIABLE_ENCRYPTION_HEADER);
+
+    VarEncInfo->CipherData        = CipherData;
+    VarEncInfo->CipherDataSize    = CipherDataSize;
+    VarEncInfo->CipherHeaderSize  = sizeof (VARIABLE_ENCRYPTION_HEADER);
+    VarEncInfo->CipherDataType    = ENC_TYPE_AES;
+
+    //
+    // Stop freeing cipher data buffer here.
+    //
+    CipherData                    = NULL;
+  } else {
+    VarEncInfo->CipherData        = NULL;
+    VarEncInfo->CipherDataSize    = 0;
+    VarEncInfo->CipherHeaderSize  = 0;
+    VarEncInfo->CipherDataType    = ENC_TYPE_NULL;
+  }
+
+  Status = EFI_SUCCESS;
+
+Done:
+  FREE_POOL (AesContext);
+  FREE_POOL (PlainData);
+  FREE_POOL (CipherData);
+
+  return Status;
+}
+
+EFI_STATUS
+EFIAPI
+DecryptVariable (
+  IN OUT VARIABLE_ENCRYPTION_INFO     *VarEncInfo
+  )
+{
+
+}
 
 EFI_STATUS
 EFIAPI
@@ -40,10 +245,14 @@ GetCipherInfo (
   EncHeader = (VARIABLE_ENCRYPTION_HEADER *)VarEncInfo->CipherData;
   if (EncHeader->DataType == ENC_TYPE_NULL) {
     //
-    // The data must be decrypted.
+    // The data must have been decrypted. Just skip the cipher header to get
+    // the decrypted data.
     //
     VarEncInfo->PlainData = (UINT8 *)VarEncInfo->CipherData + EncHeader->HeaderSize;
   } else {
+    //
+    // The data is encrypted. Return NULL to let caller know.
+    //
     VarEncInfo->PlainData = NULL;
   }
 
