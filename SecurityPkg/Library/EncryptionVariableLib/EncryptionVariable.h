@@ -26,7 +26,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #define ENC_KEY_NAME_SIZE     22
 
 #define ENC_KEY_SIZE          (256/8)
-#define ENC_BLOCK_SIZE        (128/8)
+#define ENC_BLOCK_SIZE        AES_BLOCK_SIZE
+#define ENC_IVEC_SIZE         ENC_BLOCK_SIZE
 
 //
 // PKCS#5 padding
@@ -44,7 +45,7 @@ typedef struct {
   UINT32     HeaderSize;      // sizeof(VARIABLE_ENCRYPTION_HEADER)
   UINT32     PlainDataSize;   // Plain data size
   UINT32     CipherDataSize;  // Cipher data size
-  UINT8      KeyIvec[AES_BLOCK_SIZE];
+  UINT8      KeyIvec[ENC_IVEC_SIZE];
 } VARIABLE_ENCRYPTION_HEADER;
 
 #pragma pack()

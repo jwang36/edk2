@@ -101,7 +101,42 @@ EncVarLibGenIvec (
   IN  UINTN           Size
   )
 {
+  UINT64        Data[2];
+  UINTN         Count;
+  UINT8         *Buffer;
 
+  Buffer = ALIGN_POINTER (InitVector, sizeof (UINT64));
+  Count = Buffer - InitVector;
+
+  if (Count != 0) {
+    Count += sizeof (UINT64);
+    if (!GetRandomNumber128 (Data)) {
+      return FALSE;
+    }
+
+    CopyMem (InitVector, &Data, Count);
+    Size -= Count;
+  }
+
+  Count = sizeof (UINT64) * 2;
+  while (Size >= Count) {
+    if (!GetRandomNumber128 ((UINT64 *)Buffer)) {
+      return FALSE;
+    }
+
+    Buffer  += Count;
+    Size    -= Count;
+  }
+
+  if (Count != 0) {
+    if (!GetRandomNumber128 (Data)) {
+      return FALSE;
+    }
+
+    CopyMem (Buffer, &Data, Count);
+  }
+
+  return TRUE;
 }
 
 EFI_STATUS
@@ -112,7 +147,7 @@ EncryptVariable (
 {
   VOID                          *AesContext;
   UINT8                         EncKey[ENC_KEY_SIZE];
-  UINT8                         Ivec[ENC_BLOCK_SIZE];
+  UINT8                         Ivec[ENC_IVEC_SIZE];
   UINT8                         *PlainData;
   UINTN                         PlainDataSize;
   VARIABLE_ENCRYPTION_HEADER    *CipherData;
@@ -143,7 +178,7 @@ EncryptVariable (
     return EFI_ABORTED;
   }
 
-  if (!EncVarLibGenIvec (Ivec, sizeof (Ivec))) {
+  if (!EncVarLibGenIvec (Ivec, ENC_IVEC_SIZE)) {
     ASSERT (FALSE);
     return EFI_ABORTED;
   }
@@ -227,7 +262,107 @@ DecryptVariable (
   IN OUT VARIABLE_ENCRYPTION_INFO     *VarEncInfo
   )
 {
+  VOID                          *AesContext;
+  UINT8                         EncKey[ENC_KEY_SIZE];
+  UINT8                         *PlainData;
+  EFI_STATUS                    Status;
 
+  Status      = EFI_ABORTED;
+  AesContext  = NULL;
+  PlainData   = NULL;
+
+  if (VarEncInfo->Header.VariableName == NULL ||
+      VarEncInfo->NameSize == 0 ||
+      VarEncInfo->Header.VendorGuid == NULL ||
+      VarEncInfo->Key == NULL ||
+      VarEncInfo->CipherData == NULL ||
+      VarEncInfo->CipherDataSize <= sizeof (VARIABLE_ENCRYPTION_HEADER)) {
+    ASSERT (VarEncInfo->Header.VariableName != NULL);
+    ASSERT (VarEncInfo->Header.VendorGuid != NULL);
+    ASSERT (VarEncInfo->Key != NULL);
+    ASSERT (VarEncInfo->CipherData != NULL);
+    ASSERT (VarEncInfo->CipherDataSize != 0);
+    ASSERT (VarEncInfo->CipherDataSize > sizeof (VARIABLE_ENCRYPTION_HEADER));
+    return EFI_INVALID_PARAMETER;
+  }
+
+  //
+  // Sanity check of cipher header.
+  //
+  CipherData = (VARIABLE_ENCRYPTION_HEADER *)VarEncInfo->CipherData + 1;
+  if (CipherData->DataType != ENC_TYPE_AES ||
+      CipherData->CipherDataSize == 0 ||
+      (CipherData->CipherDataSize % ENC_BLOCK_SIZE) != 0 ||
+      CipherData->PlainDataSize == 0 ||
+      CipherData->PlainDataSize > CipherData->CipherDataSize) {
+    ASSERT (CipherData->DataType == ENC_TYPE_AES);
+    ASSERT (CipherData->CipherDataSize > 0);
+    ASSERT ((CipherData->CipherDataSize % ENC_BLOCK_SIZE) == 0);
+    ASSERT (CipherData->PlainDataSize > 0);
+    ASSERT (CipherData->PlainDataSize <= CipherData->CipherDataSize);
+    return EFI_VOLUME_CORRUPTED;
+  }
+
+  if (!EncVarLibGenEncKey (VarEncInfo, ENC_KEY_SIZE, EncKey)) {
+    ASSERT (FALSE);
+    return EFI_ABORTED;
+  }
+
+  AesContext = AllocateZeroPool (AesGetContextSize ());
+  if (AesContext == NULL) {
+    ASSERT (AesContext != NULL);
+    return EFI_OUT_OF_RESOURCES;
+  }
+
+  if (!AesInit (AesContext, EncKey, ENC_KEY_SIZE)) {
+    ASSERT (FALSE);
+    goto Done;
+  }
+
+  //
+  // Decrypted data must be same size as cipher data.
+  //
+  PlainData = AllocateZeroPool (VarEncInfo->CipherDataSize);
+  if (PlainData == NULL) {
+    ASSERT (PlainData != NULL)
+    goto Done;
+  }
+
+  if (AesCbcDecrypt (AesContext, (UINT8 *)(CipherData + 1),
+                     CipherData->CipherDataSize, CipherData->KeyIvec,
+                     PlainData)) {
+    if (VarEncInfo->DecryptInPlace) {
+      //
+      // Use the same buffer of cipher data to store the deciphered data. Keep
+      // the cipher header part.
+      //
+      VarEncInfo->PlainData = (UINT8 *)(CipherData + 1);
+      CipherData->DataType  = ENC_TYPE_NULL;
+
+      CopyMem (VarencInfo->PlainData, PlainData, CipherData->PlainDataSize);
+    } else {
+      VarEncInfo->PlainData = PlainData;
+      PlainData             = NULL; // No need to free buffer here then.
+    }
+
+    VarEncInfo->CipherHeaderSize  = sizeof (VARIABLE_ENCRYPTION_HEADER);
+    VarEncInfo->CipherDataType    = ENC_TYPE_AES;
+    VarEncInfo->PlainDataSize     = CipherData->PlainDataSize;
+
+    Status = EFI_SUCCESS;
+  } else {
+    VarEncInfo->PlainData         = NULL;
+    VarEncInfo->PlainDataSize     = 0;
+
+    Status = EFI_COMPROMISED_DATA;
+  }
+
+Done:
+  FREE_POOL (AesContext);
+  FREE_POOL (PlainData);
+  FREE_POOL (CipherData);
+
+  return Status;
 }
 
 EFI_STATUS
