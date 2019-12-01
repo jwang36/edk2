@@ -34,9 +34,13 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 //#define AES_CIPHER_DATA_SIZE(PlainDataSize) \
 //  (AES_BLOCK_SIZE + (PlainDataSize)) & (~(AES_BLOCK_SIZE - 1))
+//
 #define AES_CIPHER_DATA_SIZE(PlainDataSize) ALIGN_VALUE (PlainDataSize, AES_BLOCK_SIZE)
 
-#define FREE_POOL(Address)   if (Address != NULL) { FreePool (Address); }
+#define FREE_POOL(Address)    \
+    if (Address != NULL) {    \
+      FreePool (Address);     \
+    }
 
 #pragma pack(1)
 

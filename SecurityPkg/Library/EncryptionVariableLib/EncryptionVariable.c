@@ -109,8 +109,7 @@ EncVarLibGenIvec (
   Count = Buffer - InitVector;
 
   if (Count != 0) {
-    Count += sizeof (UINT64);
-    if (!GetRandomNumber128 (Data)) {
+    if (!GetRandomNumber64 (Data)) {
       return FALSE;
     }
 
@@ -320,7 +319,7 @@ DecryptVariable (
   }
 
   //
-  // Decrypted data must be same size as cipher data.
+  // Decrypted data must be the same size as cipher data.
   //
   PlainData = AllocateZeroPool (VarEncInfo->CipherDataSize);
   if (PlainData == NULL) {
