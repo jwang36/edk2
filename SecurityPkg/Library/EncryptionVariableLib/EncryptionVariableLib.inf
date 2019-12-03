@@ -24,7 +24,8 @@
 #
 
 [Sources]
-  EncryptionVariableLib.c
+  EncryptionVariable.c
+  EncryptionVariable.h
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -42,44 +43,6 @@
   RpmcLib
 
 [Guids]
-  ## CONSUMES            ## Variable:L"SetupMode"
-  ## PRODUCES            ## Variable:L"SetupMode"
-  ## SOMETIMES_CONSUMES  ## Variable:L"PK"
-  ## SOMETIMES_CONSUMES  ## Variable:L"KEK"
-  ## CONSUMES            ## Variable:L"SecureBoot"
-  ## PRODUCES            ## Variable:L"SecureBoot"
-  ## CONSUMES            ## Variable:L"SignatureSupport"
-  ## PRODUCES            ## Variable:L"SignatureSupport"
-  ## PRODUCES            ## Variable:L"VendorKeys"
-  gEfiGlobalVariableGuid
-
-  ## SOMETIMES_CONSUMES  ## Variable:L"DB"
-  ## SOMETIMES_CONSUMES  ## Variable:L"DBX"
-  ## SOMETIMES_CONSUMES  ## Variable:L"DBT"
-  gEfiImageSecurityDatabaseGuid
-
-  ## CONSUMES            ## Variable:L"SecureBootEnable"
-  ## PRODUCES            ## Variable:L"SecureBootEnable"
-  gEfiSecureBootEnableDisableGuid
-
-  ## CONSUMES            ## Variable:L"CustomMode"
-  ## PRODUCES            ## Variable:L"CustomMode"
-  gEfiCustomModeEnableGuid
-
-  ## CONSUMES            ## Variable:L"certdb"
-  ## CONSUMES            ## Variable:L"certdbv"
-  ## PRODUCES            ## Variable:L"certdb"
-  ## PRODUCES            ## Variable:L"certdbv"
-  gEfiCertDbGuid
-
-  ## CONSUMES            ## Variable:L"VendorKeysNv"
-  ## PRODUCES            ## Variable:L"VendorKeysNv"
-  gEfiVendorKeysNvGuid
-
-  ## CONSUMES            ## Variable:L"AuthVarKeyDatabase"
-  ## PRODUCES            ## Variable:L"AuthVarKeyDatabase"
+  gEfiVariableGuid
   gEfiAuthenticatedVariableGuid
 
-  gEfiCertTypeRsa2048Sha256Guid  ## SOMETIMES_CONSUMES   ## GUID  # Unique ID for the type of the certificate.
-  gEfiCertPkcs7Guid              ## SOMETIMES_CONSUMES   ## GUID  # Unique ID for the type of the certificate.
-  gEfiCertX509Guid               ## SOMETIMES_CONSUMES   ## GUID  # Unique ID for the type of the signature.

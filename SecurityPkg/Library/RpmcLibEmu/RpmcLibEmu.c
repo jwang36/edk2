@@ -6,6 +6,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
 
+#include <Uefi.h>
+
 #include <Guid/MtcVendor.h>
 
 #include <Protocol/MonotonicCounter.h>
@@ -33,7 +35,7 @@ RequestMonotonicCounter (
   OUT UINT32  *CounterValue
   )
 {
-  UINT64      Counter;
+  EFI_STATUS  Status;
   UINTN       BufferSize;
 
   BufferSize = sizeof (*CounterValue);

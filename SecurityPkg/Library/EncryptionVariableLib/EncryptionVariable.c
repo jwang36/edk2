@@ -21,17 +21,25 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
 
-#include "Guid/VariableFormat.h"
-#include "Library/EncryptionVariableLib.h"
-#include "Library/ProtectedVariableLib.h"
-#include "Library/BaseCryptLib.h"
+#include <Uefi.h>
+
+#include <Guid/VariableFormat.h>
+#include <Library/EncryptionVariableLib.h>
+#include <Library/ProtectedVariableLib.h>
+#include <Library/BaseCryptLib.h>
+#include <Library/MemoryAllocationLib.h>
+#include <Library/BaseMemoryLib.h>
+#include <Library/DebugLib.h>
+#include <Library/RngLib.h>
+
+#include "EncryptionVariable.h"
 
 STATIC
 BOOLEAN
 EncVarLibGenEncKey (
   IN VARIABLE_ENCRYPTION_INFO     *VarEncInfo,
   IN UINTN                        EncKeySize,
-  OUT UINT8                       *EncKey,
+  OUT UINT8                       *EncKey
   )
 {
   BOOLEAN           Status;
@@ -86,7 +94,7 @@ EncVarLibGenEncKey (
              0,
              Info,
              InfoSize,
-             EncKeyKey,
+             EncKey,
              EncKeySize
              );
 
@@ -148,9 +156,9 @@ EncryptVariable (
   UINT8                         EncKey[ENC_KEY_SIZE];
   UINT8                         Ivec[ENC_IVEC_SIZE];
   UINT8                         *PlainData;
-  UINTN                         PlainDataSize;
+  UINT32                        PlainDataSize;
   VARIABLE_ENCRYPTION_HEADER    *CipherData;
-  UINTN                         CipherDataSize;
+  UINT32                        CipherDataSize;
   EFI_STATUS                    Status;
 
   Status      = EFI_ABORTED;
@@ -188,7 +196,7 @@ EncryptVariable (
     return EFI_OUT_OF_RESOURCES;
   }
 
-  if (!AesInit (AesContext, EncKey, EncKeySize)) {
+  if (!AesInit (AesContext, EncKey, ENC_KEY_SIZE)) {
     ASSERT (FALSE);
     goto Done;
   }
@@ -201,7 +209,7 @@ EncryptVariable (
     PlainData     = AllocateZeroPool (PlainDataSize);
 
     if (PlainData == NULL) {
-      ASSERT (PlainData != NULL)
+      ASSERT (PlainData != NULL);
       goto Done;
     }
   } else {
@@ -264,6 +272,7 @@ DecryptVariable (
   VOID                          *AesContext;
   UINT8                         EncKey[ENC_KEY_SIZE];
   UINT8                         *PlainData;
+  VARIABLE_ENCRYPTION_HEADER    *CipherData;
   EFI_STATUS                    Status;
 
   Status      = EFI_ABORTED;
@@ -323,7 +332,7 @@ DecryptVariable (
   //
   PlainData = AllocateZeroPool (VarEncInfo->CipherDataSize);
   if (PlainData == NULL) {
-    ASSERT (PlainData != NULL)
+    ASSERT (PlainData != NULL);
     goto Done;
   }
 
@@ -338,7 +347,7 @@ DecryptVariable (
       VarEncInfo->PlainData = (UINT8 *)(CipherData + 1);
       CipherData->DataType  = ENC_TYPE_NULL;
 
-      CopyMem (VarencInfo->PlainData, PlainData, CipherData->PlainDataSize);
+      CopyMem (VarEncInfo->PlainData, PlainData, CipherData->PlainDataSize);
     } else {
       VarEncInfo->PlainData = PlainData;
       PlainData             = NULL; // No need to free buffer here then.
@@ -393,7 +402,7 @@ GetCipherInfo (
   VarEncInfo->PlainDataSize    = EncHeader->PlainDataSize;
   VarEncInfo->CipherDataType   = EncHeader->DataType;
   VarEncInfo->CipherDataSize   = EncHeader->CipherDataSize;
-  VarEncInfo->CipherHeaderSize = EncHeader->HeaderSize
+  VarEncInfo->CipherHeaderSize = EncHeader->HeaderSize;
 
   return EFI_SUCCESS;
 }

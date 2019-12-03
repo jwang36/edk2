@@ -9,7 +9,12 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #ifndef _PROTECTED_VARIABLE_LIB_H_
 #define _PROTECTED_VARIABLE_LIB_H_
 
+#include <PiPei.h>
+#include <PiDxe.h>
+
 #include <Protocol/VarCheck.h>
+#include <Protocol/FirmwareVolumeBlock.h>
+
 #include <Library/EncryptionVariableLib.h>
 
 #define METADATA_HMAC_VARIABLE_NAME   L"MetaDataHmacVariable"
@@ -80,7 +85,7 @@ EFI_STATUS
 (EFIAPI *PROTECTED_VAR_LIB_FIND_NEXT_VARIABLE) (
   IN  CHAR16                *VariableName,
   IN  EFI_GUID              *VendorGuid,
-  OUT PROTECTED_VARIABLE_INFO    *ProtectedVariableInfo
+  OUT AUTH_VARIABLE_INFO    *ProtectedVariableInfo
   );
 
 /**
@@ -98,7 +103,7 @@ EFI_STATUS
 typedef
 EFI_STATUS
 (EFIAPI *PROTECTED_VAR_LIB_UPDATE_VARIABLE) (
-  IN PROTECTED_VARIABLE_INFO     *ProtectedVariableInfo
+  IN AUTH_VARIABLE_INFO     *ProtectedVariableInfo
   );
 
 /**
@@ -183,7 +188,7 @@ BOOLEAN
 typedef
 EFI_STATUS
 (EFIAPI *PROTECTED_VAR_LIB_UPDATE_VARIABLE_STORAGE) (
-  IN  VARIABLE_GLOBAL                     *Global,
+  IN  VOID                                *Global,
   IN  BOOLEAN                             Volatile,
   IN  BOOLEAN                             SetByIndex,
   IN  EFI_FIRMWARE_VOLUME_BLOCK_PROTOCOL  *Fvb,
@@ -272,7 +277,7 @@ typedef struct {
   PROTECTED_VAR_LIB_SET_VARIABLE              SetVariable;
   PROTECTED_VAR_LIB_ADD_VARIABLE              AddVariable;
   PROTECTED_VAR_LIB_FIND_VARIABLE             FindVariable;
-  PROTECTED_VAR_LIB_FIND_VARIABLE_IN_CACHE    FindVariableInCache;
+  //PROTECTED_VAR_LIB_FIND_VARIABLE_IN_CACHE    FindVariableInCache;
   PROTECTED_VAR_LIB_FIND_NEXT_VARIABLE        FindNextVariable;
   PROTECTED_VAR_LIB_UPDATE_VARIABLE           UpdateVariable;
   PROTECTED_VAR_LIB_GET_SCRATCH_BUFFER        GetScratchBuffer;
@@ -353,8 +358,8 @@ EFIAPI
 ProtectedVariableLibUpdateVariableState (
   IN  CHAR16                *VariableName,
   IN  EFI_GUID              *VendorGuid,
-  IN  VAR_STATE             OldState,
-  IN  VAR_STATE             NewState
+  IN  UINT8                 OldState,
+  IN  UINT8                 NewState
   );
 
 EFI_STATUS
@@ -369,18 +374,18 @@ ProtectedVariableLibAddVariable (
 EFI_STATUS
 EFIAPI
 ProtectedVariableLibFindVariable (
-  IN  CHAR16                *VariableName,
-  IN  EFI_GUID              *VendorGuid,
-  OUT ENC_VARIABLE_INFO     *EncVariableInfo
+  IN  CHAR16                    *VariableName,
+  IN  EFI_GUID                  *VendorGuid,
+  OUT VARIABLE_ENCRYPTION_INFO  *EncVariableInfo
   );
 
 EFI_STATUS
 EFIAPI
 ProtectedVariableLibFindVariableWithState (
-  IN  CHAR16                *VariableName,
-  IN  EFI_GUID              *VendorGuid,
-  IN  VAR_STATE             State,
-  OUT ENC_VARIABLE_INFO     *EncVariableInfo
+  IN  CHAR16                    *VariableName,
+  IN  EFI_GUID                  *VendorGuid,
+  IN  UINT8                     State,
+  OUT VARIABLE_ENCRYPTION_INFO  *EncVariableInfo
   );
 
 EFI_STATUS
