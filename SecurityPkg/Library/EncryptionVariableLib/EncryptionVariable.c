@@ -50,6 +50,7 @@ EncVarLibGenEncKey (
   UINT8             *Info;
   UINTN             InfoSize;
   UINTN             Index;
+  UINT8             Salt[16];
 
   //
   // info: Name||':'||Guid||':'||Attr||"VAR_ENC_KEY"
@@ -82,7 +83,7 @@ EncVarLibGenEncKey (
     return FALSE;
   }
 
-  for (InfoSize, Index = 0; Index < ARRAY_SIZE (InfoGroup); ++Index) {
+  for (InfoSize = 0, Index = 0; Index < ARRAY_SIZE (InfoGroup); ++Index) {
     CopyMem (Info + InfoSize, InfoGroup[Index].Data, InfoGroup[Index].Size);
     InfoSize += InfoGroup[Index].Size;
   }
@@ -90,7 +91,7 @@ EncVarLibGenEncKey (
   Status = HkdfSha256ExtractAndExpand (
              VarEncInfo->Key,
              VarEncInfo->KeySize,
-             NULL, 
+             Salt,
              0,
              Info,
              InfoSize,
@@ -135,12 +136,12 @@ EncVarLibGenIvec (
     Size    -= Count;
   }
 
-  if (Count != 0) {
+  if (Size != 0) {
     if (!GetRandomNumber128 (Data)) {
       return FALSE;
     }
 
-    CopyMem (Buffer, &Data, Count);
+    CopyMem (Buffer, &Data, Size);
   }
 
   return TRUE;
@@ -196,25 +197,9 @@ EncryptVariable (
     return EFI_OUT_OF_RESOURCES;
   }
 
-  if (!AesInit (AesContext, EncKey, ENC_KEY_SIZE)) {
+  if (!AesInit (AesContext, EncKey, ENC_KEY_SIZE * 8)) {
     ASSERT (FALSE);
     goto Done;
-  }
-
-  //
-  // Plain variable data must also be multiple of ENC_BLOCK_SIZE.
-  //
-  if ((VarEncInfo->PlainDataSize % ENC_BLOCK_SIZE) != 0) {
-    PlainDataSize = ALIGN_VALUE (VarEncInfo->PlainDataSize, ENC_BLOCK_SIZE);
-    PlainData     = AllocateZeroPool (PlainDataSize);
-
-    if (PlainData == NULL) {
-      ASSERT (PlainData != NULL);
-      goto Done;
-    }
-  } else {
-    PlainDataSize = VarEncInfo->PlainDataSize;
-    PlainData     = PlainData;
   }
 
   CipherDataSize = sizeof (VARIABLE_ENCRYPTION_HEADER) +
@@ -225,14 +210,41 @@ EncryptVariable (
     goto Done;
   }
 
-  CopyMem (PlainData, VarEncInfo->PlainData, VarEncInfo->PlainDataSize);
+  //
+  // Plain variable data must also be multiple of ENC_BLOCK_SIZE.
+  //
+  if ((VarEncInfo->PlainDataSize % ENC_BLOCK_SIZE) != 0) {
+    //
+    // Since the real plain data size will be saved in the VARIABLE_ENCRYPTION_HEADER,
+    // there's no need to do PKCS way of padding. To save space, just padding
+    // the plain data to be the nearest n-ENC_BLOCK_SIZE.
+    //
+    PlainDataSize = ALIGN_VALUE (VarEncInfo->PlainDataSize, ENC_BLOCK_SIZE);
+    PlainData     = AllocatePool (PlainDataSize);
+
+    if (PlainData == NULL) {
+      ASSERT (PlainData != NULL);
+      goto Done;
+    }
+
+    //
+    // Padding
+    //
+    CopyMem (PlainData, VarEncInfo->PlainData, VarEncInfo->PlainDataSize);
+    SetMem (PlainData + VarEncInfo->PlainDataSize,
+            PlainDataSize - VarEncInfo->PlainDataSize, 0x0f);
+  } else {
+    PlainDataSize = VarEncInfo->PlainDataSize;
+    PlainData     = VarEncInfo->PlainData;
+  }
+
   if (AesCbcEncrypt (AesContext, PlainData, PlainDataSize, Ivec,
                      (UINT8 *)(CipherData + 1))) {
     //
     // Keep the IV for decryption.
     //
     CopyMem (CipherData->KeyIvec, Ivec, ENC_BLOCK_SIZE);
-    CipherData->CipherDataSize    = CipherDataSize;
+    CipherData->CipherDataSize    = AES_CIPHER_DATA_SIZE (VarEncInfo->PlainDataSize);
     CipherData->PlainDataSize     = VarEncInfo->PlainDataSize;
     CipherData->DataType          = ENC_TYPE_AES;
     CipherData->HeaderSize        = sizeof (VARIABLE_ENCRYPTION_HEADER);
@@ -251,6 +263,13 @@ EncryptVariable (
     VarEncInfo->CipherDataSize    = 0;
     VarEncInfo->CipherHeaderSize  = 0;
     VarEncInfo->CipherDataType    = ENC_TYPE_NULL;
+  }
+
+  //
+  // Don't free plain data buffer if no padding
+  //
+  if (VarEncInfo->PlainData == PlainData) {
+    PlainData = NULL;
   }
 
   Status = EFI_SUCCESS;
@@ -308,7 +327,7 @@ DecryptVariable (
     ASSERT ((CipherData->CipherDataSize % ENC_BLOCK_SIZE) == 0);
     ASSERT (CipherData->PlainDataSize > 0);
     ASSERT (CipherData->PlainDataSize <= CipherData->CipherDataSize);
-    return EFI_VOLUME_CORRUPTED;
+    return EFI_COMPROMISED_DATA;
   }
 
   if (!EncVarLibGenEncKey (VarEncInfo, ENC_KEY_SIZE, EncKey)) {
@@ -322,7 +341,7 @@ DecryptVariable (
     return EFI_OUT_OF_RESOURCES;
   }
 
-  if (!AesInit (AesContext, EncKey, ENC_KEY_SIZE)) {
+  if (!AesInit (AesContext, EncKey, ENC_KEY_SIZE * 8)) {
     ASSERT (FALSE);
     goto Done;
   }
@@ -342,7 +361,7 @@ DecryptVariable (
     if (VarEncInfo->DecryptInPlace) {
       //
       // Use the same buffer of cipher data to store the deciphered data. Keep
-      // the cipher header part.
+      // the cipher header intact.
       //
       VarEncInfo->PlainData = (UINT8 *)(CipherData + 1);
       CipherData->DataType  = ENC_TYPE_NULL;
@@ -368,7 +387,6 @@ DecryptVariable (
 Done:
   FREE_POOL (AesContext);
   FREE_POOL (PlainData);
-  FREE_POOL (CipherData);
 
   return Status;
 }
