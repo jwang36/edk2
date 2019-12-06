@@ -316,7 +316,7 @@ DecryptVariable (
   //
   // Sanity check of cipher header.
   //
-  CipherData = (VARIABLE_ENCRYPTION_HEADER *)VarEncInfo->CipherData + 1;
+  CipherData = (VARIABLE_ENCRYPTION_HEADER *)VarEncInfo->CipherData;
   if (CipherData->DataType != ENC_TYPE_AES ||
       CipherData->CipherDataSize == 0 ||
       (CipherData->CipherDataSize % ENC_BLOCK_SIZE) != 0 ||
@@ -410,17 +410,18 @@ GetCipherInfo (
     // the decrypted data.
     //
     VarEncInfo->PlainData = (UINT8 *)VarEncInfo->CipherData + EncHeader->HeaderSize;
+    VarEncInfo->CipherDataSize = 0;
   } else {
     //
     // The data is encrypted. Return NULL to let caller know.
     //
     VarEncInfo->PlainData = NULL;
+    ASSERT (VarEncInfo->CipherDataSize >= (EncHeader->HeaderSize + EncHeader->CipherDataSize));
   }
 
-  VarEncInfo->PlainDataSize    = EncHeader->PlainDataSize;
-  VarEncInfo->CipherDataType   = EncHeader->DataType;
-  VarEncInfo->CipherDataSize   = EncHeader->CipherDataSize;
-  VarEncInfo->CipherHeaderSize = EncHeader->HeaderSize;
+  VarEncInfo->PlainDataSize     = EncHeader->PlainDataSize;
+  VarEncInfo->CipherDataType    = EncHeader->DataType;
+  VarEncInfo->CipherHeaderSize  = EncHeader->HeaderSize;
 
   return EFI_SUCCESS;
 }

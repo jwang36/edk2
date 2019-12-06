@@ -40,6 +40,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #define FREE_POOL(Address)    \
     if (Address != NULL) {    \
       FreePool (Address);     \
+      Address = NULL;         \
     }
 
 #pragma pack(1)
@@ -53,23 +54,5 @@ typedef struct {
 } VARIABLE_ENCRYPTION_HEADER;
 
 #pragma pack()
-
-EFI_STATUS
-EFIAPI
-EncryptVariable (
-  IN OUT VARIABLE_ENCRYPTION_INFO     *VarEncInfo
-  );
-
-EFI_STATUS
-EFIAPI
-DecryptVariable (
-  IN OUT VARIABLE_ENCRYPTION_INFO     *VarEncInfo
-  );
-
-EFI_STATUS
-EFIAPI
-GetCipherInfo (
-  IN OUT VARIABLE_ENCRYPTION_INFO     *VarEncInfo
-  );
 
 #endif  // _ENCRYPTION_VARIABLE_H_
