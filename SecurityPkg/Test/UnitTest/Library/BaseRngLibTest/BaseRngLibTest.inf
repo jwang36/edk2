@@ -1,0 +1,34 @@
+## @file
+#  Instance of RNG (Random Number Generator) Library.
+#
+#  BaseRng Library that uses CPU RdRand instruction access to provide
+#  high-quality random numbers.
+#
+#  Copyright (c) 2015, Intel Corporation. All rights reserved.<BR>
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+#
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010029
+  BASE_NAME                      = BaseRngLibTest
+  FILE_GUID                      = CD4C2232-1E0E-44FB-8E77-8DD65B4BBA44
+  MODULE_TYPE                    = BASE
+  VERSION_STRING                 = 1.0
+  LIBRARY_CLASS                  = RngLib
+
+#
+#  VALID_ARCHITECTURES           = IA32 X64
+#
+
+[Sources.Ia32, Sources.X64]
+  BaseRngTest.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+
+[LibraryClasses]
+  BaseLib
+  DebugLib
