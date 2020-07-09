@@ -176,6 +176,9 @@ PeiCore (
   EFI_HOB_HANDOFF_INFO_TABLE  *HandoffInformationTable;
   EFI_PEI_TEMPORARY_RAM_DONE_PPI *TemporaryRamDonePpi;
   UINTN                       Index;
+  BOOLEAN                     Shadow;
+
+  Shadow = FALSE;
 
   //
   // Retrieve context passed into PEI Core
@@ -418,6 +421,27 @@ PeiCore (
       ProcessPpiListFromSec ((CONST EFI_PEI_SERVICES **) &PrivateData.Ps, PpiList);
     }
   } else {
+    if (PcdGetBool (PcdMigrateTemporaryRamFirmwareVolumes)) {
+      if (PrivateData.HobList.HandoffInformationTable->BootMode == BOOT_ON_S3_RESUME) {
+        Shadow = PcdGetBool (PcdShadowPeimOnS3Boot);
+      } else {
+        Shadow = PcdGetBool (PcdShadowPeimOnBoot);
+      }
+    }
+
+    if (Shadow) {
+      DEBUG ((DEBUG_VERBOSE, "PPI lists before temporary RAM evacuation:\n"));
+      DumpPpiList (&PrivateData);
+
+      //
+      // Migrate installed content from Temporary RAM to Permanent RAM
+      //
+      EvacuateTempRam (&PrivateData, SecCoreData);
+
+      DEBUG ((DEBUG_VERBOSE, "PPI lists after temporary RAM evacuation:\n"));
+      DumpPpiList (&PrivateData);
+    }
+
     //
     // Try to locate Temporary RAM Done Ppi.
     //
