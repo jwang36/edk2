@@ -1223,10 +1223,12 @@ EvacuateTempRam (
   EFI_FIRMWARE_VOLUME_HEADER    *FvHeader;
   EFI_FIRMWARE_VOLUME_HEADER    *ChildFvHeader;
   EFI_FIRMWARE_VOLUME_HEADER    *MigratedFvHeader;
+  EFI_FIRMWARE_VOLUME_HEADER    *RawDataFvHeader;
   EFI_FIRMWARE_VOLUME_HEADER    *MigratedChildFvHeader;
 
   PEI_CORE_FV_HANDLE            PeiCoreFvHandle;
   EFI_PEI_CORE_FV_LOCATION_PPI  *PeiCoreFvLocationPpi;
+  EDKII_MIGRATED_FV_INFO        MigratedFvInfo;
 
   ASSERT (Private->PeiMemoryInstalled);
 
@@ -1263,10 +1265,24 @@ EvacuateTempRam (
         (((EFI_PHYSICAL_ADDRESS)(UINTN) FvHeader + (FvHeader->FvLength - 1)) < Private->FreePhysicalMemoryTop)
         )
       ) {
+      //
+      // Allocate page to save the rebased PEIMs, the PEIMs will get control later
+      //
       Status =  PeiServicesAllocatePages (
                   EfiBootServicesCode,
                   EFI_SIZE_TO_PAGES ((UINTN) FvHeader->FvLength),
                   (EFI_PHYSICAL_ADDRESS *) &MigratedFvHeader
+                  );
+      ASSERT_EFI_ERROR (Status);
+
+      //
+      // Allocate pool to save the raw PEIMs, it used to keep consistent context across
+      // multiple boot and PCR0 will keep same no matter if allocate random page address.
+      //
+      Status =  PeiServicesAllocatePages (
+                  EfiBootServicesCode,
+                  EFI_SIZE_TO_PAGES ((UINTN) FvHeader->FvLength),
+                  (EFI_PHYSICAL_ADDRESS *) &RawDataFvHeader
                   );
       ASSERT_EFI_ERROR (Status);
 
@@ -1278,7 +1294,19 @@ EvacuateTempRam (
         (UINTN) MigratedFvHeader
         ));
 
+      //
+      // Copy the context to the rebased pages and raw pages, and create hob to save the
+      // information. the MigratedFvInfo HOB will never produce when
+      // PcdMigrateTemporaryRamFirmwareVolumes is FALSE, because the PCD control the
+      // feature.
+      //
       CopyMem (MigratedFvHeader, FvHeader, (UINTN) FvHeader->FvLength);
+      CopyMem (RawDataFvHeader, MigratedFvHeader, (UINTN) FvHeader->FvLength);
+      MigratedFvInfo.FvOrgBase  = (UINT32) (UINTN) FvHeader;
+      MigratedFvInfo.FvNewBase  = (UINT32) (UINTN) MigratedFvHeader;
+      MigratedFvInfo.FvDataBase = (UINT32) (UINTN) RawDataFvHeader;
+      MigratedFvInfo.FvLength   = (UINT32) (UINTN) FvHeader->FvLength;
+      BuildGuidDataHob (&gEdkiiMigratedFvInfoGuid, &MigratedFvInfo, sizeof (MigratedFvInfo));
 
       //
       // Migrate any children for this FV now
