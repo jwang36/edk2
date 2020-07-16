@@ -263,14 +263,21 @@ print "Done!";
 # Copy opensslconf.h and dso_conf.h generated from OpenSSL Configuration
 #
 print "\n--> Duplicating opensslconf.h into Include/openssl ... ";
-copy($OPENSSL_PATH . "/include/openssl/opensslconf.h",
-     $OPENSSL_PATH . "/../../Include/openssl/") ||
-   die "Cannot copy opensslconf.h!";
+system(
+    "perl -pe 's/\\n/\\r\\n/' " .
+    "< " . $OPENSSL_PATH . "/include/openssl/opensslconf.h " .
+    "> " . $OPENSSL_PATH . "/../../Include/openssl/opensslconf.h"
+    ) == 0 ||
+    die "Cannot copy opensslconf.h!";
 print "Done!";
+
 print "\n--> Duplicating dso_conf.h into Include/crypto ... ";
-copy($OPENSSL_PATH . "/include/crypto/dso_conf.h",
-     $OPENSSL_PATH . "/../../Include/crypto/") ||
-   die "Cannot copy dso_conf.h!";
+system(
+    "perl -pe 's/\\n/\\r\\n/' " .
+    "< " . $OPENSSL_PATH . "/include/crypto/dso_conf.h" .
+    "> " . $OPENSSL_PATH . "/../../Include/crypto/dso_conf.h"
+    ) == 0 ||
+    die "Cannot copy dso_conf.h!";
 print "Done!\n";
 
 print "\nProcessing Files Done!\n";
